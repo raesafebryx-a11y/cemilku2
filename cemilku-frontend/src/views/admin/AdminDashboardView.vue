@@ -239,29 +239,42 @@ const fetchDashboard = async () => {
       categoryResponseData?.data ??
       categoryResponseData
 
+    if (
+      categoryData?.data &&
+      Array.isArray(categoryData.data)
+    ) {
+      categoryData = categoryData.data
+    }
+
     if (!Array.isArray(categoryData)) {
       categoryData = []
     }
 
     // ======================================
-    // ORDER
+    // ORDER (PENANGANAN TOTAL ORDER)
     // ======================================
 
     const orderResponseData = ordersResponse.data
+    let totalOrderCount = 0
 
-    let orderData =
-      orderResponseData?.data ??
-      orderResponseData
+    // Deteksi jika API mengembalikan objek total angka langsung (misal: { total: 5 })
+    if (typeof orderResponseData?.total === 'number') {
+      totalOrderCount = orderResponseData.total
+    } else if (typeof orderResponseData?.data?.total === 'number') {
+      totalOrderCount = orderResponseData.data.total
+    } else {
+      // Jika merespons Array / List Order
+      let orderData = orderResponseData?.data ?? orderResponseData
 
-    if (
-      orderData?.data &&
-      Array.isArray(orderData.data)
-    ) {
-      orderData = orderData.data
-    }
+      if (orderData?.data && Array.isArray(orderData.data)) {
+        orderData = orderData.data
+      } else if (!Array.isArray(orderData) && Array.isArray(orderData?.orders)) {
+        orderData = orderData.orders
+      }
 
-    if (!Array.isArray(orderData)) {
-      orderData = []
+      if (Array.isArray(orderData)) {
+        totalOrderCount = orderData.length
+      }
     }
 
     // ======================================
@@ -273,6 +286,13 @@ const fetchDashboard = async () => {
     let contactData =
       contactResponseData?.data ??
       contactResponseData
+
+    if (
+      contactData?.data &&
+      Array.isArray(contactData.data)
+    ) {
+      contactData = contactData.data
+    }
 
     if (!Array.isArray(contactData)) {
       contactData = []
@@ -300,7 +320,7 @@ const fetchDashboard = async () => {
       {
         id: 3,
         label: 'Total Order',
-        value: orderData.length,
+        value: totalOrderCount,
         sub: 'Pesanan masuk',
         icon: '📑'
       },
@@ -710,63 +730,29 @@ onUnmounted(() => {
           </p>
         </div>
 
-        <!-- STATS -->
-        <div v-else class="analytics-grid">
-          <div class="trend-panel">
-            <div class="panel-header">
-              <div class="mini-calendar">
-                <span class="calendar-icon">🗓️</span>
-              </div>
-              <span class="panel-year">2023-2028</span>
+        <!-- STATS CARDS (RINGKAS & SEDERHANA) -->
+        <div v-else-if="stats.length" class="stats-grid">
+          <div
+            v-for="stat in stats"
+            :key="stat.id"
+            class="stat-card"
+          >
+            <div class="stat-icon">
+              {{ stat.icon }}
             </div>
 
-            <div class="trend-value">17.3%</div>
+            <div class="stat-details">
+              <span class="stat-label">
+                {{ stat.label }}
+              </span>
 
-            <svg viewBox="0 0 420 220" class="trend-chart" aria-label="Growth trend chart">
-              <g class="chart-grid">
-                <line x1="0" y1="30" x2="420" y2="30" />
-                <line x1="0" y1="70" x2="420" y2="70" />
-                <line x1="0" y1="110" x2="420" y2="110" />
-                <line x1="0" y1="150" x2="420" y2="150" />
-                <line x1="0" y1="190" x2="420" y2="190" />
-              </g>
+              <h2 class="stat-value">
+                {{ stat.value }}
+              </h2>
 
-              <path
-                d="M 0 175 L 60 168 L 110 152 L 160 128 L 205 113 L 260 102 L 310 82 L 360 60 L 420 38"
-                class="trend-line"
-              />
-
-              <circle cx="60" cy="168" r="5" class="chart-point" />
-              <circle cx="110" cy="152" r="5" class="chart-point" />
-              <circle cx="160" cy="128" r="5" class="chart-point" />
-              <circle cx="205" cy="113" r="5" class="chart-point" />
-              <circle cx="260" cy="102" r="5" class="chart-point" />
-              <circle cx="310" cy="82" r="5" class="chart-point" />
-              <circle cx="360" cy="60" r="5" class="chart-point" />
-            </svg>
-          </div>
-
-          <div class="market-panel">
-            <h2>Market opportunity<br>over next 5 years</h2>
-
-            <div class="bar-chart-wrap">
-              <div class="chart-label chart-label-left">2.5BN</div>
-              <div class="chart-label chart-label-right">5.7BN</div>
-
-              <div class="bar-chart">
-                <div class="bar-group bar-group-left">
-                  <div class="bar bar-navy" style="height: 42%"></div>
-                </div>
-
-                <div class="bar-group bar-group-right">
-                  <div class="bar bar-orange" style="height: 72%"></div>
-                </div>
-              </div>
-
-              <div class="axis-labels">
-                <span>2023</span>
-                <span>2028</span>
-              </div>
+              <p class="stat-sub">
+                {{ stat.sub }}
+              </p>
             </div>
           </div>
         </div>
@@ -1222,18 +1208,6 @@ onUnmounted(() => {
     rgba(37, 99, 235, 0.18);
 }
 
-/*
-  Dashboard hanya aktif saat:
-  /admin
-
-  Tidak ikut aktif pada:
-  /admin/produk
-  /admin/kategori
-  /admin/order
-  /admin/order-item
-  /admin/kontak
-*/
-
 .menu-item.router-link-exact-active {
   background: var(--nav-active);
 
@@ -1245,7 +1219,7 @@ onUnmounted(() => {
 }
 
 /* ==================================================
-   ICON
+   ICON & TEXT
 ================================================== */
 
 .menu-icon {
@@ -1260,10 +1234,6 @@ onUnmounted(() => {
 
   line-height: 1;
 }
-
-/* ==================================================
-   TEXT
-================================================== */
 
 .menu-text {
   white-space: nowrap;
@@ -1480,7 +1450,7 @@ onUnmounted(() => {
 
   margin-top: 24px;
 
-  padding-bottom: 45px;
+  margin-bottom: 24px;
 
   box-shadow:
     0 12px 24px
@@ -1591,204 +1561,111 @@ onUnmounted(() => {
 }
 
 /* ==================================================
-   STATS
+   STATS GRID (RINGKAS & SEDERHANA)
 ================================================== */
 
-.analytics-grid {
+.stats-grid {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: 22px;
-  margin-top: 8px;
-  margin-bottom: 26px;
+
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+
+  gap: 20px;
+
+  margin-bottom: 24px;
 }
 
-.trend-panel,
-.market-panel {
-  background: rgba(255, 255, 255, 0.7);
+.stat-card {
+  background: var(--surface);
+
   border: 1px solid var(--panel-border);
-  border-radius: 24px;
-  padding: 18px 20px 14px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
-}
 
-.dashboard-layout.navbar-dark .trend-panel,
-.dashboard-layout.navbar-dark .market-panel {
-  background: rgba(15, 23, 42, 0.7);
-}
+  border-radius: 16px;
 
-.panel-header {
+  padding: 20px;
+
   display: flex;
+
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  color: var(--text);
+
+  gap: 16px;
+
+  backdrop-filter: blur(10px);
+
+  box-shadow:
+    0 4px 12px
+    rgba(15, 23, 42, 0.03);
+
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.mini-calendar {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+.stat-card:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 8px 20px
+    rgba(15, 23, 42, 0.06);
+}
+
+.stat-icon {
+  width: 48px;
+
+  height: 48px;
+
+  border-radius: 12px;
+
+  background: rgba(37, 99, 235, 0.1);
+
   display: grid;
+
   place-items: center;
-  background: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.12);
+
+  font-size: 22px;
+
+  flex-shrink: 0;
 }
 
-.calendar-icon {
-  font-size: 18px;
-  line-height: 1;
+.stat-details {
+  min-width: 0;
 }
 
-.panel-year {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-}
+.stat-label {
+  font-size: 12px;
 
-.trend-value {
-  font-size: clamp(2.2rem, 3vw, 3.5rem);
-  font-weight: 900;
-  letter-spacing: -0.06em;
-  color: #1b334d;
-  line-height: 1;
-  margin: 0 0 8px;
-}
+  font-weight: 600;
 
-.dashboard-layout.navbar-dark .trend-value {
-  color: #dbeafe;
-}
+  color: var(--muted);
 
-.trend-chart {
-  width: 100%;
-  height: 220px;
   display: block;
 }
 
-.chart-grid line {
-  stroke: rgba(71, 85, 105, 0.18);
-  stroke-width: 1;
+.stat-value {
+  font-size: 24px;
+
+  font-weight: 800;
+
+  color: var(--text);
+
+  margin: 2px 0;
+
+  line-height: 1.2;
 }
 
-.trend-line {
-  fill: none;
-  stroke: #1f3a5f;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
+.stat-sub {
+  font-size: 11px;
 
-.chart-point {
-  fill: #f97316;
-  stroke: #ffffff;
-  stroke-width: 3;
-}
+  color: var(--muted);
 
-.market-panel {
-  background: #dfeaf5;
-  padding-top: 20px;
-}
+  margin: 0;
 
-.dashboard-layout.navbar-dark .market-panel {
-  background: rgba(148, 163, 184, 0.08);
-}
+  white-space: nowrap;
 
-.market-panel h2 {
-  margin: 0 0 18px;
-  font-size: clamp(2rem, 2.2vw, 3.2rem);
-  line-height: 1.06;
-  letter-spacing: -0.06em;
-  color: #1f2937;
-}
+  overflow: hidden;
 
-.dashboard-layout.navbar-dark .market-panel h2 {
-  color: #f8fafc;
-}
-
-.bar-chart-wrap {
-  position: relative;
-  padding-top: 12px;
-}
-
-.bar-chart {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: end;
-  gap: 18px;
-  min-height: 220px;
-  padding-top: 24px;
-}
-
-.bar-group {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  height: 180px;
-}
-
-.bar {
-  width: 100%;
-  max-width: 140px;
-  border-radius: 8px 8px 0 0;
-  box-shadow: inset 0 -8px 12px rgba(255, 255, 255, 0.12);
-}
-
-.bar-navy {
-  background: linear-gradient(180deg, #1f3d67, #1e293b);
-}
-
-.bar-orange {
-  background: linear-gradient(180deg, #fb923c, #f97316);
-}
-
-.chart-label {
-  position: absolute;
-  top: 0;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #475569;
-}
-
-.chart-label-right {
-  right: 14px;
-}
-
-.chart-label-left {
-  left: 14px;
-}
-
-.axis-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
-  padding: 0 10px 0 6px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #475569;
-}
-
-@media (max-width: 1100px) {
-  .analytics-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 600px) {
-  .analytics-grid {
-    margin-top: 0;
-  }
-
-  .trend-panel,
-  .market-panel {
-    padding: 16px 14px;
-  }
-
-  .market-panel h2 {
-    font-size: 2rem;
-  }
+  text-overflow: ellipsis;
 }
 
 /* ==================================================
-   TABLE
+   TABLE CARD
 ================================================== */
 
 .table-card {
@@ -1796,59 +1673,68 @@ onUnmounted(() => {
 
   border: 1px solid var(--panel-border);
 
-  border-radius: 14px;
+  border-radius: 16px;
 
-  margin-top: 24px;
+  padding: 20px;
 
-  overflow: hidden;
+  backdrop-filter: blur(10px);
+
+  box-shadow:
+    0 4px 12px
+    rgba(15, 23, 42, 0.03);
 }
 
 .table-header {
-  padding: 20px 24px;
-
-  border-bottom:
-    1px solid var(--panel-border);
-
   display: flex;
+
+  justify-content: space-between;
 
   align-items: center;
 
-  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 .table-header h3 {
-  margin: 0;
-
   font-size: 16px;
 
   font-weight: 800;
+
+  margin: 0;
 
   color: var(--text);
 }
 
 .table-header p {
-  margin: 5px 0 0;
-
   font-size: 12px;
 
   color: var(--muted);
+
+  margin: 2px 0 0;
 }
 
 .view-all-btn {
-  border: none;
-
   background: transparent;
+
+  border: none;
 
   color: #2563eb;
 
   font-weight: 700;
 
+  font-size: 13px;
+
   cursor: pointer;
 
-  font-size: 13px;
+  transition: color 0.2s ease;
+}
+
+.view-all-btn:hover {
+  color: #1d4ed8;
 }
 
 .table-responsive {
+  width: 100%;
+
   overflow-x: auto;
 }
 
@@ -1859,35 +1745,33 @@ table {
 
   text-align: left;
 
-  font-size: 14px;
+  font-size: 13px;
 }
 
 th {
-  background: rgba(
-    148,
-    163,
-    184,
-    0.06
-  );
+  padding: 12px 14px;
 
   color: var(--muted);
 
-  padding: 14px 24px;
-
   font-weight: 700;
 
-  font-size: 12px;
+  font-size: 11px;
 
   text-transform: uppercase;
+
+  border-bottom: 1px solid var(--panel-border);
 }
 
 td {
-  padding: 16px 24px;
+  padding: 14px;
 
-  border-bottom:
-    1px solid var(--panel-border);
+  border-bottom: 1px solid var(--panel-border);
 
   color: var(--text);
+}
+
+tr:last-child td {
+  border-bottom: none;
 }
 
 .font-bold {
@@ -1895,7 +1779,7 @@ td {
 }
 
 /* ==================================================
-   STATUS
+   STATUS BADGES
 ================================================== */
 
 .status-badge {
@@ -1906,220 +1790,71 @@ td {
   font-size: 11px;
 
   font-weight: 700;
+
+  display: inline-block;
 }
 
 .status-success {
-  background:
-    rgba(34, 197, 94, 0.12);
+  background: rgba(34, 197, 94, 0.12);
 
-  color: #15803d;
+  color: #16a34a;
 }
 
 .status-warning {
-  background:
-    rgba(250, 204, 21, 0.14);
+  background: rgba(245, 158, 11, 0.12);
 
-  color: #a16207;
+  color: #d97706;
 }
 
 .status-danger {
-  background:
-    rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.12);
 
-  color: #b91c1c;
+  color: #dc2626;
 }
 
 /* ==================================================
-   LOADING / ERROR
+   STATES (LOADING, EMPTY, ERROR)
 ================================================== */
 
 .loading-state,
+.empty-state,
 .error-state {
-  margin-top: 24px;
+  text-align: center;
 
-  padding: 50px 20px;
+  padding: 48px 20px;
 
   background: var(--surface);
 
   border: 1px solid var(--panel-border);
 
-  border-radius: 14px;
-
-  text-align: center;
-
-  color: var(--muted);
+  border-radius: 16px;
 }
 
-.error-state h3 {
-  margin: 0 0 8px;
+.empty-icon {
+  font-size: 36px;
 
-  color: var(--text);
-}
-
-.error-state p {
-  margin: 0 0 20px;
-
-  font-size: 13px;
+  margin-bottom: 12px;
 }
 
 .loading-spinner {
-  width: 34px;
-  height: 34px;
+  width: 32px;
 
-  margin: 0 auto 12px;
+  height: 32px;
 
-  border: 3px solid
-    rgba(37, 99, 235, 0.15);
+  border: 3px solid rgba(37, 99, 235, 0.2);
 
   border-top-color: #2563eb;
 
   border-radius: 50%;
 
-  animation:
-    spin 0.8s linear infinite;
+  animation: spin 0.8s linear infinite;
+
+  margin: 0 auto 12px;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-/* ==================================================
-   EMPTY
-================================================== */
-
-.empty-state {
-  margin-top: 24px;
-
-  background: var(--surface);
-
-  border: 1px solid var(--panel-border);
-
-  border-radius: 14px;
-
-  padding: 45px 20px;
-
-  text-align: center;
-
-  color: var(--muted);
-}
-
-.empty-icon {
-  font-size: 40px;
-
-  margin-bottom: 10px;
-}
-
-.empty-state h3 {
-  margin: 0 0 6px;
-
-  color: var(--text);
-}
-
-.empty-state p {
-  margin: 0 0 18px;
-
-  font-size: 13px;
-}
-
-/* ==================================================
-   RESPONSIVE
-================================================== */
-
-@media (max-width: 1100px) {
-  .stats-grid {
-    grid-template-columns:
-      repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 800px) {
-  .sidebar {
-    width: 210px;
-    min-width: 210px;
-  }
-
-  .main-wrapper {
-    margin-left: 210px;
-  }
-
-  .search-box {
-    width: 220px;
-  }
-
-  .content-body {
-    padding: 0 18px 20px;
-  }
-
-  .banner-content {
-    flex-direction: column;
-
-    align-items: flex-start;
-  }
-}
-
-@media (max-width: 600px) {
-  .sidebar {
-    width: 70px;
-    min-width: 70px;
-  }
-
-  .main-wrapper {
-    margin-left: 70px;
-  }
-
-  .sidebar-brand {
-    justify-content: center;
-
-    padding: 15px 8px;
-  }
-
-  .brand-info,
-  .menu-category {
-    display: none;
-  }
-
-  .sidebar-menu {
-    padding: 15px 8px;
-  }
-
-  .menu-item {
-    justify-content: center;
-
-    padding: 12px;
-
-    font-size: 0;
-  }
-
-  .menu-icon {
-    font-size: 18px;
-  }
-
-  .menu-text {
-    display: none;
-  }
-
-  .topbar {
-    padding: 0 12px;
-  }
-
-  .search-box {
-    display: none;
-  }
-
-  .user-info {
-    display: none;
-  }
-
-  .stats-grid {
-    grid-template-columns: 1fr;
-
-    padding: 0;
-  }
-
-  .dashboard-banner {
-    padding: 20px;
   }
 }
 </style>

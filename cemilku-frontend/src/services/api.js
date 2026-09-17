@@ -11,7 +11,6 @@ const api = axios.create({
 // =====================================================
 // REQUEST INTERCEPTOR
 // =====================================================
-
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token')
@@ -30,19 +29,22 @@ api.interceptors.request.use(
 // =====================================================
 // RESPONSE INTERCEPTOR
 // =====================================================
-
 api.interceptors.response.use(
     (response) => {
         return response
     },
     (error) => {
-        if (error.response?.status === 401) {
+        // Jangan auto-logout jika request berasal dari endpoint /user saat proses callback
+        const isUserEndpoint = error.config?.url?.includes('/user')
+
+        if (error.response?.status === 401 && !isUserEndpoint) {
             localStorage.removeItem('token')
             localStorage.removeItem('user')
             localStorage.removeItem('username')
             localStorage.removeItem('role')
             localStorage.removeItem('userRole')
             localStorage.removeItem('isLoggedIn')
+            delete api.defaults.headers.common['Authorization']
         }
 
         return Promise.reject(error)

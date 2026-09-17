@@ -28,18 +28,21 @@ onMounted(async () => {
   }
 
   try {
+    // 1. Eksekusi login via token di Pinia Store
     await auth.loginWithToken(token)
 
+    // 2. Notifikasi sukses
     await Swal.fire({
       icon: 'success',
       title: 'Login Berhasil! 🎉',
-      text: `Selamat datang, ${auth.username}!`,
+      text: `Selamat datang, ${auth.username || 'Pengguna'}!`,
       timer: 1500,
       showConfirmButton: false,
       timerProgressBar: true
     })
 
-    if (auth.userRole === 'admin') {
+    // 3. Pengalihan halaman berdasarkan role
+    if (auth.isAdmin) {
       router.replace('/admin')
     } else {
       router.replace('/')
@@ -50,7 +53,7 @@ onMounted(async () => {
     await Swal.fire({
       icon: 'error',
       title: 'Login Google Gagal',
-      text: 'Terjadi kesalahan saat memproses login. Silakan coba lagi.',
+      text: error.message || 'Terjadi kesalahan saat memproses login. Silakan coba lagi.',
       confirmButtonColor: '#2563eb'
     })
 

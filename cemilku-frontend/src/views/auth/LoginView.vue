@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
-import api from '@/api/axios'
+import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const auth = useAuthStore()
 
 // =====================================================
 // STATE
@@ -12,14 +14,14 @@ const router = useRouter()
 
 const email = ref('')
 const password = ref('')
-const showPassword = ref(false)
+const showPassword = ref(false) // State untuk toggle show/hide password
 
 const errorMessage = ref('')
 const loading = ref(false)
 const googleLoading = ref(false)
 
 // =====================================================
-// TOGGLE PASSWORD
+// TOGGLE PASSWORD VISIBILITY
 // =====================================================
 
 const togglePasswordVisibility = () => {
@@ -47,7 +49,10 @@ const handleLogin = async () => {
   const loginEmail = email.value.trim()
   const loginPassword = password.value
 
-  // Validasi
+  // ===================================================
+  // VALIDASI
+  // ===================================================
+
   if (!loginEmail || !loginPassword) {
     errorMessage.value =
       'Email dan password wajib diisi.'
@@ -64,67 +69,33 @@ const handleLogin = async () => {
     return
   }
 
+  // ===================================================
+  // LOADING
+  // ===================================================
+
   loading.value = true
 
   try {
-    console.log('Mengirim login ke Laravel...')
-    console.log('Email:', loginEmail)
-
     // =================================================
-    // LOGIN LANGSUNG KE LARAVEL
+    // LOGIN KE BACKEND
     // =================================================
 
-    const response = await api.post('/login', {
+    await auth.login({
       email: loginEmail,
       password: loginPassword
     })
 
-    console.log('RESPON LOGIN:', response.data)
+    console.log('Login berhasil:', auth.user)
+    console.log('Role user:', auth.userRole)
 
     // =================================================
-    // SIMPAN TOKEN
-    // =================================================
-
-    if (response.data.token) {
-      localStorage.setItem(
-        'token',
-        response.data.token
-      )
-    }
-
-    // =================================================
-    // SIMPAN USER JIKA DIKIRIM BACKEND
-    // =================================================
-
-    if (response.data.user) {
-      localStorage.setItem(
-        'user',
-        JSON.stringify(response.data.user)
-      )
-    }
-
-    // =================================================
-    // AMBIL ROLE
-    // =================================================
-
-    const user = response.data.user
-
-    const role =
-      user?.role ||
-      response.data.role ||
-      'user'
-
-    console.log('User:', user)
-    console.log('Role:', role)
-
-    // =================================================
-    // BERHASIL
+    // LOGIN BERHASIL
     // =================================================
 
     await Swal.fire({
       icon: 'success',
       title: 'Login Berhasil! 🎉',
-      text: `Selamat datang kembali, ${user?.name || user?.username || loginEmail}!`,
+      text: `Selamat datang kembali, ${auth.username}!`,
       timer: 1500,
       showConfirmButton: false,
       timerProgressBar: true,
@@ -133,98 +104,73 @@ const handleLogin = async () => {
     })
 
     // =================================================
-    // REDIRECT ROLE
+    // REDIRECT BERDASARKAN ROLE
     // =================================================
 
-    if (role === 'admin') {
+    if (auth.userRole === 'admin') {
       router.push('/admin')
     } else {
       router.push('/')
     }
 
   } catch (error) {
-    console.error('LOGIN ERROR:', error)
+    console.error('Login error:', error)
 
     // =================================================
-    // CEK ERROR DARI SERVER
+    // ERROR VALIDASI 422
     // =================================================
 
-    if (error.response) {
+    if (error.response?.status === 422) {
+      const errors =
+        error.response?.data?.errors
 
-      console.log(
-        'Status:',
-        error.response.status
-      )
+      if (errors) {
+        const firstError =
+          Object.values(errors)[0]
 
-      console.log(
-        'Data:',
-        error.response.data
-      )
-
-      // 422
-      if (error.response.status === 422) {
-
-        const errors =
-          error.response.data?.errors
-
-        if (errors) {
-
-          const firstError =
-            Object.values(errors)[0]
-
-          if (Array.isArray(firstError)) {
-            errorMessage.value =
-              firstError[0]
-          } else {
-            errorMessage.value =
-              firstError
-          }
-
-        } else {
-
+        if (Array.isArray(firstError)) {
           errorMessage.value =
-            error.response.data?.message ||
-            'Data login tidak valid.'
+            firstError[0]
+        } else {
+          errorMessage.value =
+            firstError
         }
-
-      // 401
-      } else if (
-        error.response.status === 401
-      ) {
-
-        errorMessage.value =
-          error.response.data?.message ||
-          'Email atau password salah.'
-
-      // 404
-      } else if (
-        error.response.status === 404
-      ) {
-
-        errorMessage.value =
-          'Endpoint login tidak ditemukan. Periksa route Laravel.'
-
-      // 500
-      } else if (
-        error.response.status >= 500
-      ) {
-
-        errorMessage.value =
-          'Terjadi kesalahan pada server Laravel.'
-
       } else {
-
         errorMessage.value =
-          error.response.data?.message ||
-          'Login gagal.'
+          error.response?.data?.message ||
+          'Data login tidak valid.'
       }
 
-    } else {
+    // =================================================
+    // EMAIL / PASSWORD SALAH
+    // =================================================
 
-      // Tidak mendapat response dari Laravel
+    } else if (error.response?.status === 401) {
       errorMessage.value =
-        'Tidak dapat terhubung ke server Laravel. Pastikan backend berjalan dan alamat API benar.'
+        error.response?.data?.message ||
+        'Email atau password salah.'
+
+    // =================================================
+    // ERROR SERVER
+    // =================================================
+
+    } else if (error.response?.status >= 500) {
+      errorMessage.value =
+        'Terjadi kesalahan pada server Laravel. Pastikan backend berjalan dengan benar.'
+
+    // =================================================
+    // ERROR LAINNYA
+    // =================================================
+
+    } else {
+      errorMessage.value =
+        error.response?.data?.message ||
+        'Login gagal. Pastikan server Laravel sedang berjalan.'
     }
+
+    // =================================================
+    // SWEETALERT ERROR
+    // =================================================
 
     await Swal.fire({
       icon: 'error',
@@ -241,32 +187,17 @@ const handleLogin = async () => {
 }
 
 // =====================================================
-// LOGIN GOOGLE
+// LOGIN DENGAN GOOGLE
 // =====================================================
 
 const loginWithGoogle = async () => {
-
   googleLoading.value = true
 
   try {
-
-    const response =
-      await api.get('/auth/google/redirect')
-
-    console.log(
-      'Google Login:',
-      response.data
-    )
-
-    window.location.href =
-      response.data.url
-
+    const response = await api.get('/auth/google/redirect')
+    window.location.href = response.data.url
   } catch (error) {
-
-    console.error(
-      'Gagal memulai login Google:',
-      error
-    )
+    console.error('Gagal memulai login Google:', error)
 
     await Swal.fire({
       icon: 'error',
@@ -277,14 +208,12 @@ const loginWithGoogle = async () => {
       color: '#1e293b'
     })
 
-  } finally {
-
     googleLoading.value = false
   }
 }
 
 // =====================================================
-// KEMBALI HOME
+// KEMBALI KE HOME
 // =====================================================
 
 const goHome = () => {

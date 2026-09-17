@@ -65,7 +65,8 @@ const filteredOrders = computed(() => {
       !keyword ||
       order.order_number?.toLowerCase().includes(keyword) ||
       order.user?.name?.toLowerCase().includes(keyword) ||
-      order.user?.email?.toLowerCase().includes(keyword)
+      order.user?.email?.toLowerCase().includes(keyword) ||
+      order.customer_name?.toLowerCase().includes(keyword)
 
     const matchesStatus =
       !filterStatus.value ||
@@ -115,23 +116,39 @@ const goTo = (path) => {
   router.push(path)
 }
 
+// ==========================================
+// FIX ALUR FETCH ORDERS ADMIN
+// ==========================================
 const fetchOrders = async () => {
   loading.value = true
   error.value = ''
 
   try {
-    const response = await api.get('/orders')
+    // Coba panggil endpoint admin terlebih dahulu, fallback ke /orders biasa
+    let response
+    try {
+      response = await api.get('/admin/orders')
+    } catch (e) {
+      response = await api.get('/orders')
+    }
+
     const payload = response.data
 
+    // Ekstraksi data dengan aman dari berbagai bentuk response API
+    let rawData = []
     if (Array.isArray(payload)) {
-      orders.value = payload
+      rawData = payload
     } else if (Array.isArray(payload.data)) {
-      orders.value = payload.data
+      rawData = payload.data
     } else if (payload.data && Array.isArray(payload.data.data)) {
-      orders.value = payload.data.data
-    } else {
-      orders.value = []
+      rawData = payload.data.data
+    } else if (Array.isArray(payload.orders)) {
+      rawData = payload.orders
+    } else if (payload.orders && Array.isArray(payload.orders.data)) {
+      rawData = payload.orders.data
     }
+
+    orders.value = rawData
   } catch (err) {
     console.error('Gagal mengambil order:', err)
     error.value = err.response?.data?.message || 'Gagal mengambil data pesanan.'
@@ -152,8 +169,15 @@ const fetchOrders = async () => {
 
 const openDetail = async (order) => {
   try {
-    const response = await api.get(`/admin/orders/${order.id}`)
-    selectedOrder.value = response.data
+    let response
+    try {
+      response = await api.get(`/admin/orders/${order.id}`)
+    } catch (e) {
+      response = await api.get(`/orders/${order.id}`)
+    }
+
+    const resData = response.data
+    selectedOrder.value = resData.data || resData.order || resData
     showDetail.value = true
   } catch (err) {
     console.error('Gagal mengambil detail order:', err)
@@ -191,16 +215,23 @@ const updateStatus = async (order, newStatus) => {
   updatingStatus.value = true
 
   try {
-    const response = await api.put(`/admin/orders/${order.id}/status`, { status: newStatus })
-    const updatedOrder = response.data.order
+    let response
+    try {
+      response = await api.put(`/admin/orders/${order.id}/status`, { status: newStatus })
+    } catch (e) {
+      response = await api.patch(`/admin/orders/${order.id}`, { status: newStatus })
+    }
+
+    const resData = response.data
+    const updatedOrder = resData.order || resData.data || resData
 
     const index = orders.value.findIndex((item) => item.id === order.id)
     if (index !== -1) {
-      orders.value[index] = updatedOrder
+      orders.value[index] = { ...orders.value[index], ...updatedOrder, status: newStatus }
     }
 
     if (selectedOrder.value && selectedOrder.value.id === order.id) {
-      selectedOrder.value = updatedOrder
+      selectedOrder.value = { ...selectedOrder.value, ...updatedOrder, status: newStatus }
     }
 
     await Swal.fire({
@@ -273,7 +304,11 @@ onMounted(async () => {
 
   if (!auth.user) {
     try {
-      await auth.fetchUser()
+      if (typeof auth.fetchUser === 'function') {
+        await auth.fetchUser()
+      } else if (typeof auth.fetchMe === 'function') {
+        await auth.fetchMe()
+      }
     } catch (error) {
       console.error('Gagal mengambil data user:', error)
       router.replace('/login')
@@ -371,12 +406,12 @@ onUnmounted(() => {
           <button class="icon-btn" aria-label="Notifikasi">🔔</button>
 
           <div class="user-info">
-            <div class="user-name">{{ auth.username || 'Admin' }}</div>
+            <div class="user-name">{{ auth.username || auth.user?.name || 'Admin' }}</div>
             <div class="user-role">Administrator</div>
           </div>
 
           <div class="user-avatar">
-            {{ (auth.username || 'A').charAt(0).toUpperCase() }}
+            {{ (auth.username || auth.user?.name || 'A').charAt(0).toUpperCase() }}
           </div>
         </div>
       </header>
@@ -486,33 +521,33 @@ onUnmounted(() => {
               <tbody>
                 <tr v-for="order in filteredOrders" :key="order.id">
                   <td>
-                    <div class="order-number">{{ order.order_number }}</div>
+                    <div class="order-number">{{ order.order_number || ('#ORD-' + order.id) }}</div>
                     <small class="order-id">#{{ order.id }}</small>
                   </td>
 
                   <td>
                     <div class="customer-cell">
-                      <div class="customer-avatar">{{ order.user?.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+                      <div class="customer-avatar">{{ (order.user?.name || order.customer_name || '?').charAt(0).toUpperCase() }}</div>
                       <div>
-                        <strong>{{ order.user?.name || '-' }}</strong>
-                        <small>{{ order.user?.email || '-' }}</small>
+                        <strong>{{ order.user?.name || order.customer_name || '-' }}</strong>
+                        <small>{{ order.user?.email || order.customer_email || '-' }}</small>
                       </div>
                     </div>
                   </td>
 
                   <td>
                     <div class="product-meta">
-                      <span>{{ order.items?.length || 0 }} produk</span>
+                      <span>{{ order.items?.length || order.order_items?.length || 0 }} produk</span>
                     </div>
-                    <small class="quantity">{{ order.items?.reduce((total, item) => total + Number(item.quantity || 0), 0) || 0 }} item</small>
+                    <small class="quantity">{{ (order.items || order.order_items || []).reduce((total, item) => total + Number(item.quantity || 0), 0) }} item</small>
                   </td>
 
                   <td>
-                    <strong class="total-price">{{ formatRupiah(order.total) }}</strong>
+                    <strong class="total-price">{{ formatRupiah(order.total || order.total_price || order.grand_total) }}</strong>
                   </td>
 
                   <td>
-                    <span v-if="order.payment" class="payment-badge" :class="getPaymentClass(order.payment.status)">{{ getPaymentStatusLabel(order.payment.status) }}</span>
+                    <span v-if="order.payment || order.payment_status" class="payment-badge" :class="getPaymentClass(order.payment?.status || order.payment_status)">{{ getPaymentStatusLabel(order.payment?.status || order.payment_status) }}</span>
                     <span v-else class="muted-text">Belum ada</span>
                   </td>
 
@@ -542,7 +577,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <div>
             <span class="modal-label">Detail Pesanan</span>
-            <h2>{{ selectedOrder.order_number }}</h2>
+            <h2>{{ selectedOrder.order_number || ('#ORD-' + selectedOrder.id) }}</h2>
           </div>
           <button class="close-button" @click="closeDetail">×</button>
         </div>
@@ -556,18 +591,18 @@ onUnmounted(() => {
           <div class="detail-section">
             <h3>👤 Pelanggan</h3>
             <div class="info-box">
-              <strong>{{ selectedOrder.user?.name || '-' }}</strong>
-              <span>{{ selectedOrder.user?.email || '-' }}</span>
+              <strong>{{ selectedOrder.user?.name || selectedOrder.customer_name || '-' }}</strong>
+              <span>{{ selectedOrder.user?.email || selectedOrder.customer_email || '-' }}</span>
             </div>
           </div>
 
           <div class="detail-section">
             <h3>📍 Alamat Pengiriman</h3>
             <div v-if="selectedOrder.address" class="info-box">
-              <strong>{{ selectedOrder.address.recipient_name || '-' }}</strong>
-              <span>{{ selectedOrder.address.phone || '-' }}</span>
-              <p>{{ selectedOrder.address.full_address || '-' }}</p>
-              <span>{{ selectedOrder.address.city || '-' }} - {{ selectedOrder.address.postal_code || '-' }}</span>
+              <strong>{{ selectedOrder.address.recipient_name || selectedOrder.address.nama_penerima || '-' }}</strong>
+              <span>{{ selectedOrder.address.phone || selectedOrder.address.telepon || '-' }}</span>
+              <p>{{ selectedOrder.address.full_address || selectedOrder.address.alamat_lengkap || '-' }}</p>
+              <span>{{ selectedOrder.address.city || selectedOrder.address.kota || '-' }} - {{ selectedOrder.address.postal_code || selectedOrder.address.kode_pos || '-' }}</span>
             </div>
             <div v-else class="no-data">Alamat tidak tersedia.</div>
           </div>
@@ -575,12 +610,12 @@ onUnmounted(() => {
           <div class="detail-section">
             <h3>🛒 Produk Pesanan</h3>
             <div class="items-list">
-              <div v-for="item in selectedOrder.items" :key="item.id" class="order-item">
+              <div v-for="item in (selectedOrder.items || selectedOrder.order_items || [])" :key="item.id" class="order-item">
                 <div class="item-info">
-                  <strong>{{ item.product_name || item.product?.name || '-' }}</strong>
-                  <span>{{ item.quantity }} × {{ formatRupiah(item.price) }}</span>
+                  <strong>{{ item.product_name || item.product?.name || item.nama_produk || '-' }}</strong>
+                  <span>{{ item.quantity }} × {{ formatRupiah(item.price || item.harga) }}</span>
                 </div>
-                <strong>{{ formatRupiah(item.subtotal) }}</strong>
+                <strong>{{ formatRupiah(item.subtotal || (item.quantity * (item.price || item.harga))) }}</strong>
               </div>
             </div>
           </div>
@@ -592,11 +627,11 @@ onUnmounted(() => {
             </div>
             <div>
               <span>Ongkir</span>
-              <strong>{{ formatRupiah(selectedOrder.shipping_cost) }}</strong>
+              <strong>{{ formatRupiah(selectedOrder.shipping_cost || selectedOrder.ongkir) }}</strong>
             </div>
             <div class="grand-total">
               <span>Total</span>
-              <strong>{{ formatRupiah(selectedOrder.total) }}</strong>
+              <strong>{{ formatRupiah(selectedOrder.total || selectedOrder.total_price || selectedOrder.grand_total) }}</strong>
             </div>
           </div>
 
@@ -605,7 +640,7 @@ onUnmounted(() => {
             <div v-if="selectedOrder.payment" class="payment-detail">
               <div>
                 <span>Metode</span>
-                <strong>{{ selectedOrder.payment.method || '-' }}</strong>
+                <strong>{{ selectedOrder.payment.method || selectedOrder.payment.payment_type || '-' }}</strong>
               </div>
               <div>
                 <span>Status</span>
@@ -613,7 +648,7 @@ onUnmounted(() => {
               </div>
               <div>
                 <span>Jumlah</span>
-                <strong>{{ formatRupiah(selectedOrder.payment.amount) }}</strong>
+                <strong>{{ formatRupiah(selectedOrder.payment.amount || selectedOrder.payment.gross_amount) }}</strong>
               </div>
 
               <div v-if="selectedOrder.payment.proof_image" class="proof-wrapper">
@@ -1278,295 +1313,215 @@ td {
   border: 1px solid #bfdbfe;
   background: #eff6ff;
   color: #2563eb;
-  border-radius: 9px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  padding: 6px 12px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .detail-button:hover {
-  background: #dbeafe;
+  background: #2563eb;
+  color: white;
 }
 
 .modal-overlay {
   position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(5px);
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  z-index: 2000;
 }
 
 .detail-modal {
-  width: min(760px, 100%);
-  max-height: 90vh;
   background: var(--surface);
   border: 1px solid var(--panel-border);
-  border-radius: 20px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
 
 .modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 22px 24px;
+  padding: 20px;
   border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .modal-label {
+  font-size: 11px;
   color: var(--muted);
-  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .modal-header h2 {
-  margin: 5px 0 0;
+  margin: 4px 0 0;
+  font-size: 20px;
   color: var(--text);
 }
 
 .close-button {
-  width: 34px;
-  height: 34px;
+  background: transparent;
   border: none;
-  border-radius: 9px;
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--text);
   font-size: 24px;
+  color: var(--muted);
   cursor: pointer;
 }
 
 .modal-content {
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
-  max-height: calc(90vh - 145px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .detail-status {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  background: rgba(148, 163, 184, 0.05);
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin-bottom: 20px;
-}
-
-.detail-status > span:first-child {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.detail-section {
-  margin-bottom: 22px;
-}
-
-.detail-section h3 {
-  margin: 0 0 10px;
-  color: var(--text);
-  font-size: 15px;
-}
-
-.info-box,
-.payment-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: rgba(148, 163, 184, 0.04);
-  border-radius: 12px;
-  padding: 14px;
-}
-
-.info-box strong,
-.payment-detail strong {
-  color: var(--text);
-}
-
-.info-box span,
-.payment-detail span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.info-box p {
-  margin: 6px 0;
-  color: var(--text);
-  line-height: 1.6;
-}
-
-.no-data {
-  color: var(--muted);
-  font-size: 13px;
-  background: rgba(148, 163, 184, 0.04);
-  padding: 14px;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(148, 163, 184, 0.06);
   border-radius: 10px;
 }
 
-.items-list {
+.detail-section h3 {
+  font-size: 14px;
+  margin: 0 0 10px;
+  color: var(--text);
+}
+
+.info-box {
+  background: rgba(148, 163, 184, 0.04);
   border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  overflow: hidden;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-box p {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.no-data {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .order-item {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 15px;
-  padding: 13px 15px;
-  border-bottom: 1px solid var(--panel-border);
+  align-items: center;
+  padding: 10px;
+  background: rgba(148, 163, 184, 0.04);
+  border-radius: 8px;
 }
 
-.order-item:last-child { border-bottom: none; }
-
-.item-info strong,
-.item-info span {
-  display: block;
-}
-
-.item-info strong {
-  color: var(--text);
-  font-size: 13px;
+.item-info {
+  display: flex;
+  flex-direction: column;
 }
 
 .item-info span {
+  font-size: 11px;
   color: var(--muted);
-  font-size: 12px;
-  margin-top: 3px;
-}
-
-.order-item > strong {
-  color: #2563eb;
-  white-space: nowrap;
 }
 
 .summary-box {
-  background: rgba(37, 99, 235, 0.05);
-  border-radius: 13px;
-  padding: 16px;
-  margin-bottom: 22px;
+  background: rgba(37, 99, 235, 0.04);
+  border: 1px solid rgba(37, 99, 235, 0.1);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.summary-box > div {
+.summary-box div {
   display: flex;
   justify-content: space-between;
-  gap: 15px;
-  padding: 6px 0;
-  color: var(--muted);
   font-size: 13px;
 }
 
-.summary-box strong {
-  color: var(--text);
-}
-
-.summary-box .grand-total {
-  border-top: 1px solid rgba(37, 99, 235, 0.15);
-  margin-top: 8px;
-  padding-top: 12px;
-  color: var(--text);
-  font-size: 15px;
-}
-
-.summary-box .grand-total strong {
+.grand-total {
+  border-top: 1px solid rgba(37, 99, 235, 0.2);
+  padding-top: 8px;
   color: #2563eb;
-  font-size: 18px;
+  font-weight: 800;
+  font-size: 15px !important;
 }
 
-.payment-detail > div:not(.proof-wrapper) {
+.payment-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(148, 163, 184, 0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.payment-detail div {
   display: flex;
   justify-content: space-between;
-  gap: 15px;
-  padding: 6px 0;
   font-size: 13px;
 }
 
 .proof-wrapper {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--panel-border);
-}
-
-.proof-wrapper > span {
-  display: block;
-  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  border-top: 1px dashed var(--panel-border);
+  padding-top: 8px;
 }
 
 .proof-wrapper img {
-  display: block;
   width: 100%;
-  max-height: 300px;
+  max-height: 200px;
   object-fit: contain;
-  border-radius: 10px;
-  background: #e2e8f0;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
 }
 
 .modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--panel-border);
   display: flex;
   justify-content: flex-end;
-  padding: 16px 24px;
-  border-top: 1px solid var(--panel-border);
 }
 
 .secondary-button {
+  background: rgba(148, 163, 184, 0.1);
   border: 1px solid var(--panel-border);
-  background: rgba(148, 163, 184, 0.04);
   color: var(--text);
-  border-radius: 10px;
-  padding: 10px 16px;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-weight: 700;
   cursor: pointer;
-}
-
-@media (max-width: 900px) {
-  .sidebar { width: 220px; }
-  .main-wrapper { margin-left: 220px; }
-  .content-body { padding: 0 20px 24px; }
-  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 700px) {
-  .sidebar {
-    position: relative;
-    width: 100%;
-    min-height: auto;
-    height: auto;
-  }
-
-  .main-wrapper {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .dashboard-layout { display: block; }
-
-  .topbar {
-    height: auto;
-    padding: 18px 20px;
-    gap: 15px;
-    flex-wrap: wrap;
-  }
-
-  .content-body { padding: 0 16px 20px; }
-
-  .page-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .btn-primary-action {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .stats-grid { grid-template-columns: 1fr; }
-  .toolbar-actions { width: 100%; }
-  .toolbar-actions select { width: 100%; }
-  .user-info { display: none; }
 }
 </style>
