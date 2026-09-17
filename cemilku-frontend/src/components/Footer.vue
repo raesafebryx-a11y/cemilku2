@@ -89,7 +89,7 @@ onUnmounted(() => {
         <h3>Hubungi Kami</h3>
 
         <p>📍 Indonesia</p>
-        <p>📞 +62 812-3456-7890</p>
+        <p>📞 +62 896-1986-9600</p>
         <p>✉️ cemilku@gmail.com</p>
       </div>
 
