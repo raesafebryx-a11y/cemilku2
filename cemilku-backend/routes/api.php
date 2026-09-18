@@ -1,152 +1,168 @@
-<?php
+    <?php
 
-use App\Http\Controllers\Api\AddressController;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\CartController;
-use App\Http\Controllers\Api\CategoryController;
-use App\Http\Controllers\Api\ContactController;
-use App\Http\Controllers\Api\OrderController;
-use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\AdminOrderController;
-use App\Http\Controllers\Api\AdminOrderItemController;
-use App\Http\Controllers\Api\AdminContactController;
-use App\Http\Controllers\Api\GoogleAuthController;
-use Illuminate\Support\Facades\Route;
+    use App\Http\Controllers\Api\AddressController;
+    use App\Http\Controllers\Api\AdminContactController;
+    use App\Http\Controllers\Api\AdminOrderController;
+    use App\Http\Controllers\Api\AdminOrderItemController;
+    use App\Http\Controllers\Api\AuthController;
+    use App\Http\Controllers\Api\CartController;
+    use App\Http\Controllers\Api\CategoryController;
+    use App\Http\Controllers\Api\ContactController;
+    use App\Http\Controllers\Api\GoogleAuthController;
+    use App\Http\Controllers\Api\OrderController;
+    use App\Http\Controllers\Api\PaymentController;
+    use App\Http\Controllers\Api\ProductController;
+    use App\Http\Controllers\Api\RajaOngkirController;
+    use Illuminate\Support\Facades\Route;
 
+    // =====================================================
+    // PUBLIC ROUTES
+    // =====================================================
 
-// =====================================================
-// PUBLIC ROUTES
-// =====================================================
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login', [AuthController::class, 'login']);
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+    // =====================================================
+    // MIDTRANS CALLBACK
+    // =====================================================
 
-// =====================================================
-// GOOGLE AUTH
-// =====================================================
-Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
-Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
-
-
-// =====================================================
-// CATEGORIES
-// =====================================================
-
-// Bisa dilihat tanpa login
-Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/{category}', [CategoryController::class, 'show']);
+    Route::post('/midtrans/notification', [PaymentController::class, 'handleNotification']);
 
 
-// =====================================================
-// PRODUCTS
-// =====================================================
+    // =====================================================
+    // GOOGLE AUTH
+    // =====================================================
+    Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
+    Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 
-// Bisa dilihat tanpa login
-Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{product}', [ProductController::class, 'show']);
+    // =====================================================
+    // CATEGORIES (Public)
+    // =====================================================
 
+    Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/categories/{category}', [CategoryController::class, 'show']);
 
-// =====================================================
-// CONTACTS
-// =====================================================
+    // =====================================================
+    // PRODUCTS (Public)
+    // =====================================================
 
-Route::apiResource('contacts', ContactController::class)
-    ->only([
-        'index',
-        'store',
-        'show',
-        'update',
-        'destroy',
-    ]);
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{product}', [ProductController::class, 'show']);
 
+    // =====================================================
+    // CONTACTS
+    // =====================================================
 
-// =====================================================
-// ROUTES WAJIB LOGIN
-// =====================================================
+    Route::apiResource('contacts', ContactController::class)
+        ->only([
+            'index',
+            'store',
+            'show',
+            'update',
+            'destroy',
+        ]);
 
-Route::middleware('auth:sanctum')->group(function () {
+    // =====================================================
+    // RAJAONGKIR SHIPPING (PUBLIC)
+    // =====================================================
 
-    // =================================================
-    // AUTH
-    // =================================================
+    Route::get('/provinces', [RajaOngkirController::class, 'provinces']);
+    Route::get('/cities/{provinceId}', [RajaOngkirController::class, 'cities']);
+    Route::post('/shipping-cost', [RajaOngkirController::class, 'cost']);
 
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me', [AuthController::class, 'me']);
+    // =====================================================
+    // ROUTES WAJIB LOGIN (PROTECTED)
+    // =====================================================
 
+    Route::middleware('auth:sanctum')->group(function () {
 
-    // =================================================
-    // ADMIN CONTACT MANAGEMENT
-    // =================================================
-    Route::get('/admin/contacts', [AdminContactController::class, 'index']);
-    Route::get('/admin/contacts/{contact}', [AdminContactController::class, 'show']);
-    Route::delete('/admin/contacts/{contact}', [AdminContactController::class, 'destroy']);
+        // =================================================
+        // AUTH USER PROFILE
+        // =================================================
 
-    // =================================================
-    // ADMIN ORDER ITEM MANAGEMENT
-    // =================================================
-    Route::get('/admin/order-items', [AdminOrderItemController::class, 'index']);
-    Route::get('/admin/order-items/{orderItem}', [AdminOrderItemController::class, 'show']);
-    Route::delete('/admin/order-items/{orderItem}', [AdminOrderItemController::class, 'destroy']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/me', [AuthController::class, 'me']);
+        
+        // Alias /user agar cocok dengan request Axios / Pinia
+        Route::get('/user', [AuthController::class, 'me']);
 
-    // =================================================
-    // ADMIN ORDER MANAGEMENT
-    // =================================================
-    Route::get('/admin/orders', [AdminOrderController::class, 'index']);
-    Route::get('/admin/orders/{order}', [AdminOrderController::class, 'show']);
-    Route::put('/admin/orders/{order}/status', [AdminOrderController::class, 'updateStatus']);
+        // Route Update Profile & Update Password
+        Route::put('/profile', [AuthController::class, 'updateProfile']);
+        Route::put('/profile/password', [AuthController::class, 'updatePassword']);
 
-    // =================================================
-    // CATEGORY MANAGEMENT
-    // =================================================
+        // =================================================
+        // ADMIN CONTACT MANAGEMENT
+        // =================================================
+        Route::get('/admin/contacts', [AdminContactController::class, 'index']);
+        Route::get('/admin/contacts/{contact}', [AdminContactController::class, 'show']);
+        Route::put('/admin/contacts/{contact}', [AdminContactController::class, 'update']);
+        Route::delete('/admin/contacts/{contact}', [AdminContactController::class, 'destroy']);
 
-    Route::post('/categories', [CategoryController::class, 'store']);
-    Route::put('/categories/{category}', [CategoryController::class, 'update']);
-    Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
+        // =================================================
+        // ADMIN ORDER ITEM MANAGEMENT
+        // =================================================
+        Route::get('/admin/order-items', [AdminOrderItemController::class, 'index']);
+        Route::get('/admin/order-items/{orderItem}', [AdminOrderItemController::class, 'show']);
+        Route::delete('/admin/order-items/{orderItem}', [AdminOrderItemController::class, 'destroy']);
 
+        // =================================================
+        // ADMIN ORDER MANAGEMENT
+        // =================================================
+        Route::get('/admin/orders', [AdminOrderController::class, 'index']);
+        Route::get('/admin/orders/{order}', [AdminOrderController::class, 'show']);
+        Route::put('/admin/orders/{order}/status', [AdminOrderController::class, 'updateStatus']);
+        Route::put('/admin/orders/{order}/payment-status', [AdminOrderController::class, 'updatePaymentStatus']);
 
-    // =================================================
-    // PRODUCT MANAGEMENT
-    // =================================================
+        // =================================================
+        // CATEGORY MANAGEMENT
+        // =================================================
 
-    Route::post('/products', [ProductController::class, 'store']);
-    Route::put('/products/{product}', [ProductController::class, 'update']);
-    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+        Route::post('/categories', [CategoryController::class, 'store']);
+        Route::put('/categories/{category}', [CategoryController::class, 'update']);
+        Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
 
+        // =================================================
+        // PRODUCT MANAGEMENT
+        // =================================================
 
-    // =================================================
-    // CART
-    // =================================================
+        Route::post('/products', [ProductController::class, 'store']);
+        Route::put('/products/{product}', [ProductController::class, 'update']);
+        Route::delete('/products/{product}', [ProductController::class, 'destroy']);
 
-    Route::get('/cart', [CartController::class, 'index']);
-    Route::post('/cart/items', [CartController::class, 'addItem']);
-    Route::put('/cart/items/{cartItem}', [CartController::class, 'updateItem']);
-    Route::delete('/cart/items/{cartItem}', [CartController::class, 'removeItem']);
+        // =================================================
+        // CART
+        // =================================================
 
+        Route::get('/cart', [CartController::class, 'index']);
+        Route::post('/cart/items', [CartController::class, 'addItem']);
+        Route::put('/cart/items/{cartItem}', [CartController::class, 'updateItem']);
+        Route::delete('/cart/items/{cartItem}', [CartController::class, 'removeItem']);
 
-    // =================================================
-    // ADDRESSES
-    // =================================================
+        // =================================================
+        // ADDRESSES
+        // =================================================
 
-    Route::get('/addresses', [AddressController::class, 'index']);
-    Route::post('/addresses', [AddressController::class, 'store']);
+        Route::get('/addresses', [AddressController::class, 'index']);
+        Route::post('/addresses', [AddressController::class, 'store']);
 
+        // =================================================
+        // ORDERS
+        // =================================================
 
-    // =================================================
-    // ORDERS
-    // =================================================
+        Route::get('/orders', [OrderController::class, 'index']);
+        Route::get('/orders/{order}', [OrderController::class, 'show']);
+        Route::post('/orders', [OrderController::class, 'store']);
+        
+        // =================================================
+        // PAYMENTS
+        // =================================================
 
-    Route::get('/orders', [OrderController::class, 'index']);
-    Route::get('/orders/{order}', [OrderController::class, 'show']);
-    Route::post('/orders', [OrderController::class, 'store']);
+        // Midtrans: request Snap Token
+        Route::post('/orders/{order}/snap-token', [PaymentController::class, 'createSnapToken']);
 
+        // Midtrans: simulasi pembayaran sukses (demo / sandbox)
+        Route::post('/orders/{order}/pay-simulate', [PaymentController::class, 'simulateMidtransSuccess']);
 
-    // =================================================
-    // PAYMENTS
-    // =================================================
-
-    Route::post(
-        '/payments/{payment}/proof',
-        [PaymentController::class, 'uploadProof']
-    );
-});
+        // Upload bukti transfer manual (fallback)
+        Route::post('/payments/{payment}/proof', [PaymentController::class, 'uploadProof']);
+    });
