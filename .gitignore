@@ -1,0 +1,16 @@
+# Backend
+cemilku-backend/.env
+cemilku-backend/vendor/
+
+# Frontend
+cemilku-frontend/.env
+cemilku-frontend/node_modules/
+cemilku-frontend/dist/
+
+# Editor
+.vscode/
+.idea/
+
+# Operating System
+.DS_Store
+Thumbs.db

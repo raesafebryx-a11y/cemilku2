@@ -19,11 +19,11 @@ class AdminOrderController extends Controller
         $orders = Order::with([
             'user:id,name,email',
             'address',
-            'items',
+            'items.product',
             'payment',
         ])
-            ->latest()
-            ->get();
+        ->latest()
+        ->get();
 
         return response()->json($orders);
     }
@@ -69,12 +69,48 @@ class AdminOrderController extends Controller
         $order->load([
             'user:id,name,email',
             'address',
-            'items',
+            'items.product',
             'payment',
         ]);
 
         return response()->json([
             'message' => 'Status pesanan berhasil diperbarui.',
+            'order' => $order,
+        ]);
+    }
+
+    public function updatePaymentStatus(Request $request, Order $order)
+    {
+        abort_unless(
+            $request->user()->role === 'admin',
+            403,
+            'Anda tidak memiliki akses admin.'
+        );
+
+        $data = $request->validate([
+            'status' => [
+                'required',
+                'string',
+                'in:pending,waiting_verification,paid,failed,expired',
+            ],
+        ]);
+
+        if ($order->payment) {
+            $order->payment->update([
+                'status' => $data['status'],
+                'paid_at' => $data['status'] === 'paid' ? now() : $order->payment->paid_at,
+            ]);
+        }
+
+        $order->load([
+            'user:id,name,email',
+            'address',
+            'items.product',
+            'payment',
+        ]);
+
+        return response()->json([
+            'message' => 'Status pembayaran berhasil diperbarui.',
             'order' => $order,
         ]);
     }

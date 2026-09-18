@@ -45,6 +45,11 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = userData
         token.value = tokenData
 
+        // Set Authorization Header di Axios Instance
+        if (tokenData) {
+            api.defaults.headers.common['Authorization'] = `Bearer ${tokenData}`
+        }
+
         localStorage.setItem(
             'user',
             JSON.stringify(userData)
@@ -154,14 +159,22 @@ export const useAuthStore = defineStore('auth', () => {
     const loginWithToken = async (tokenData) => {
         token.value = tokenData
 
+        // 1. Set Authorization Header di Axios sebelum fetchUser dipanggil
+        api.defaults.headers.common['Authorization'] = `Bearer ${tokenData}`
+
+        // 2. Simpan token ke localStorage
         localStorage.setItem('token', tokenData)
         localStorage.setItem('isLoggedIn', 'true')
 
+        // 3. Ambil data user dari backend
         const userData = await fetchUser()
 
         if (!userData) {
             throw new Error('Gagal mengambil data user setelah login Google.')
         }
+
+        // 4. Update data user ke localStorage
+        saveAuth(userData, tokenData)
 
         return userData
     }
@@ -184,6 +197,9 @@ export const useAuthStore = defineStore('auth', () => {
             user.value = null
             token.value = ''
 
+            // Hapus Header Axios
+            delete api.defaults.headers.common['Authorization']
+
             localStorage.removeItem('token')
             localStorage.removeItem('user')
             localStorage.removeItem('username')
@@ -203,31 +219,37 @@ export const useAuthStore = defineStore('auth', () => {
         }
 
         try {
+            // Pastikan Authorization header selalu terpasang
+            api.defaults.headers.common['Authorization'] = `Bearer ${token.value}`
+
             const response = await api.get('/user')
 
-            user.value = response.data
+            // Tangani fleksibilitas struktur JSON response dari Laravel
+            const fetchedUserData = response.data?.data || response.data
+
+            user.value = fetchedUserData
 
             localStorage.setItem(
                 'user',
-                JSON.stringify(response.data)
+                JSON.stringify(fetchedUserData)
             )
 
             localStorage.setItem(
                 'username',
-                response.data?.name || ''
+                fetchedUserData?.name || ''
             )
 
             localStorage.setItem(
                 'role',
-                response.data?.role || 'user'
+                fetchedUserData?.role || 'user'
             )
 
             localStorage.setItem(
                 'userRole',
-                response.data?.role || 'user'
+                fetchedUserData?.role || 'user'
             )
 
-            return response.data
+            return fetchedUserData
         } catch (error) {
             console.error(
                 'Fetch user error:',
@@ -236,6 +258,8 @@ export const useAuthStore = defineStore('auth', () => {
 
             user.value = null
             token.value = ''
+
+            delete api.defaults.headers.common['Authorization']
 
             localStorage.removeItem('token')
             localStorage.removeItem('user')

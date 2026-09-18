@@ -319,43 +319,63 @@ const generateSlug = () => {
 
 const saveProduct = async () => {
   if (!form.value.category_id) {
-    Swal.fire({
+    return Swal.fire({
       icon: 'warning',
       title: 'Kategori Belum Dipilih',
       text: 'Silakan pilih kategori produk.',
       confirmButtonColor: '#2563eb'
     })
-    return
   }
 
   if (!form.value.name.trim()) {
-    Swal.fire({
+    return Swal.fire({
       icon: 'warning',
       title: 'Nama Produk Kosong',
       text: 'Nama produk wajib diisi.',
       confirmButtonColor: '#2563eb'
     })
-    return
   }
 
-  if (form.value.price === '' || Number(form.value.price) < 0) {
-    Swal.fire({
+  if (!form.value.description.trim()) {
+    return Swal.fire({
+      icon: 'warning',
+      title: 'Deskripsi Kosong',
+      text: 'Deskripsi produk wajib diisi.',
+      confirmButtonColor: '#2563eb'
+    })
+  }
+
+  if (
+    form.value.price === '' ||
+    Number(form.value.price) <= 0
+  ) {
+    return Swal.fire({
       icon: 'warning',
       title: 'Harga Tidak Valid',
-      text: 'Masukkan harga produk yang benar.',
+      text: 'Harga harus lebih dari 0.',
       confirmButtonColor: '#2563eb'
     })
-    return
   }
 
-  if (form.value.stock === '' || Number(form.value.stock) < 0) {
-    Swal.fire({
+  if (
+    form.value.stock === '' ||
+    Number(form.value.stock) < 0
+  ) {
+    return Swal.fire({
       icon: 'warning',
       title: 'Stok Tidak Valid',
-      text: 'Masukkan stok produk yang benar.',
+      text: 'Masukkan stok yang benar.',
       confirmButtonColor: '#2563eb'
     })
-    return
+  }
+
+  if (!editingProduct.value && !selectedImage.value) {
+    return Swal.fire({
+      icon: 'warning',
+      title: 'Gambar Belum Dipilih',
+      text: 'Silakan upload gambar produk.',
+      confirmButtonColor: '#2563eb'
+    })
   }
 
   saving.value = true
@@ -364,22 +384,54 @@ const saveProduct = async () => {
     const formData = new FormData()
 
     formData.append('category_id', form.value.category_id)
-    formData.append('name', form.value.name)
-    formData.append('slug', form.value.slug || form.value.name)
-    formData.append('description', form.value.description || '')
-    formData.append('price', form.value.price)
-    formData.append('stock', form.value.stock)
-    formData.append('is_active', form.value.is_active ? '1' : '0')
+    formData.append('name', form.value.name.trim())
+
+    formData.append(
+      'slug',
+      form.value.slug?.trim() || form.value.name.trim()
+    )
+
+    formData.append(
+      'description',
+      form.value.description.trim()
+    )
+
+    formData.append(
+      'price',
+      Number(form.value.price)
+    )
+
+    formData.append(
+      'stock',
+      Number(form.value.stock)
+    )
+
+    // STATUS PRODUK
+    formData.append(
+      'is_active',
+      form.value.is_active ? 1 : 0
+    )
 
     if (selectedImage.value) {
-      formData.append('image', selectedImage.value)
+      formData.append(
+        'image',
+        selectedImage.value
+      )
     }
 
     if (editingProduct.value) {
       formData.append('_method', 'PUT')
-      await api.post(`/products/${editingProduct.value.id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+
+      await api.post(
+        `/products/${editingProduct.value.id}`,
+        formData,
+        {
+          headers: {
+            'Content-Type':
+              'multipart/form-data'
+          }
+        }
+      )
 
       await Swal.fire({
         icon: 'success',
@@ -389,9 +441,16 @@ const saveProduct = async () => {
         showConfirmButton: false
       })
     } else {
-      await api.post('/products', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      await api.post(
+        '/products',
+        formData,
+        {
+          headers: {
+            'Content-Type':
+              'multipart/form-data'
+          }
+        }
+      )
 
       await Swal.fire({
         icon: 'success',
@@ -404,14 +463,26 @@ const saveProduct = async () => {
 
     closeModal()
     await fetchProducts()
-  } catch (error) {
-    console.error('Gagal menyimpan produk:', error)
 
-    const validationErrors = error.response?.data?.errors
-    let message = error.response?.data?.message || 'Produk gagal disimpan.'
+  } catch (error) {
+    console.error(
+      'Gagal menyimpan produk:',
+      error
+    )
+
+    const validationErrors =
+      error.response?.data?.errors
+
+    let message =
+      error.response?.data?.message ||
+      'Produk gagal disimpan.'
 
     if (validationErrors) {
-      message = Object.values(validationErrors).flat().join(', ')
+      message = Object.values(
+        validationErrors
+      )
+        .flat()
+        .join(', ')
     }
 
     Swal.fire({
@@ -519,52 +590,53 @@ onUnmounted(() => {
       </div>
 
       <nav class="sidebar-menu">
-        <div class="menu-category">MAIN</div>
+  <div class="menu-category">MAIN</div>
 
-        <button class="menu-item" @click="goTo('/admin')">
-          <span class="menu-icon">📊</span>
-          <span class="menu-text">Dashboard</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin')">
+    <span class="menu-icon">📊</span>
+    <span class="menu-text">Dashboard</span>
+  </button>
 
-        <div class="menu-category">KELOLA TOKO</div>
+  <div class="menu-category">KELOLA TOKO</div>
 
-        <button class="menu-item router-link-exact-active">
-          <span class="menu-icon">🍿</span>
-          <span class="menu-text">Produk</span>
-        </button>
+  <button class="menu-item router-link-exact-active">
+    <span class="menu-icon">🍿</span>
+    <span class="menu-text">Produk</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/kategori')">
-          <span class="menu-icon">🏷️</span>
-          <span class="menu-text">Kategori</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/kategori')">
+    <span class="menu-icon">🏷️</span>
+    <span class="menu-text">Kategori</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/order')">
-          <span class="menu-icon">📑</span>
-          <span class="menu-text">Order</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/order')">
+    <span class="menu-icon">📑</span>
+    <span class="menu-text">Order</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/order-item')">
-          <span class="menu-icon">📋</span>
-          <span class="menu-text">Order Item</span>
-        </button>
+ 
+  <button class="menu-item" @click="goTo('/admin/kontak')">
+    <span class="menu-icon">💬</span>
+    <span class="menu-text">Pesan Kontak</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/kontak')">
-          <span class="menu-icon">💬</span>
-          <span class="menu-text">Pesan Kontak</span>
-        </button>
+  <div class="menu-category">SISTEM</div>
 
-        <div class="menu-category">SISTEM</div>
+  <button class="menu-item" @click="goTo('/admin/pengaturan')">
+    <span class="menu-icon">⚙️</span>
+    <span class="menu-text">Pengaturan</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/pengaturan')">
-          <span class="menu-icon">⚙️</span>
-          <span class="menu-text">Pengaturan</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/profile')">
+    <span class="menu-icon">👤</span>
+    <span class="menu-text">Profile</span>
+  </button>
 
-        <a href="#" class="menu-item logout" @click.prevent="handleLogout">
-          <span class="menu-icon">🚪</span>
-          <span class="menu-text">Keluar</span>
-        </a>
-      </nav>
+  <a href="#" class="menu-item logout" @click.prevent="handleLogout">
+    <span class="menu-icon">🚪</span>
+    <span class="menu-text">Keluar</span>
+  </a>
+</nav>
     </aside>
 
     <div class="main-wrapper">

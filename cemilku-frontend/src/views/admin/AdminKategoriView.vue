@@ -318,53 +318,53 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <nav class="sidebar-menu">
-        <div class="menu-category">MAIN</div>
+     <nav class="sidebar-menu">
+  <div class="menu-category">MAIN</div>
 
-        <button class="menu-item" @click="goTo('/admin')">
-          <span class="menu-icon">📊</span>
-          <span class="menu-text">Dashboard</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin')">
+    <span class="menu-icon">📊</span>
+    <span class="menu-text">Dashboard</span>
+  </button>
 
-        <div class="menu-category">KELOLA TOKO</div>
+  <div class="menu-category">KELOLA TOKO</div>
 
-        <button class="menu-item" @click="goTo('/admin/produk')">
-          <span class="menu-icon">🍿</span>
-          <span class="menu-text">Produk</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/produk')">
+    <span class="menu-icon">🍿</span>
+    <span class="menu-text">Produk</span>
+  </button>
 
-        <button class="menu-item router-link-exact-active">
-          <span class="menu-icon">🏷️</span>
-          <span class="menu-text">Kategori</span>
-        </button>
+  <button class="menu-item router-link-exact-active">
+    <span class="menu-icon">🏷️</span>
+    <span class="menu-text">Kategori</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/order')">
-          <span class="menu-icon">📑</span>
-          <span class="menu-text">Order</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/order')">
+    <span class="menu-icon">📑</span>
+    <span class="menu-text">Order</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/order-item')">
-          <span class="menu-icon">📋</span>
-          <span class="menu-text">Order Item</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/kontak')">
+    <span class="menu-icon">💬</span>
+    <span class="menu-text">Pesan Kontak</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/kontak')">
-          <span class="menu-icon">💬</span>
-          <span class="menu-text">Pesan Kontak</span>
-        </button>
+  <div class="menu-category">SISTEM</div>
 
-        <div class="menu-category">SISTEM</div>
+  <button class="menu-item" @click="goTo('/admin/pengaturan')">
+    <span class="menu-icon">⚙️</span>
+    <span class="menu-text">Pengaturan</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/pengaturan')">
-          <span class="menu-icon">⚙️</span>
-          <span class="menu-text">Pengaturan</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/profile')">
+    <span class="menu-icon">👤</span>
+    <span class="menu-text">Profile</span>
+  </button>
 
-        <a href="#" class="menu-item logout" @click.prevent="handleLogout">
-          <span class="menu-icon">🚪</span>
-          <span class="menu-text">Keluar</span>
-        </a>
-      </nav>
+  <a href="#" class="menu-item logout" @click.prevent="handleLogout">
+    <span class="menu-icon">🚪</span>
+    <span class="menu-text">Keluar</span>
+  </a>
+</nav>
     </aside>
 
     <div class="main-wrapper">
