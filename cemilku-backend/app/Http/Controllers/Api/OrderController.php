@@ -13,15 +13,26 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $orders = $request->user()->orders()->with('items', 'payment')->latest()->get();
+        $user = $request->user();
+
+        // Mengambil daftar order beserta relasi item produk, pembayaran, dan user
+        if ($user->role === 'admin' || $user->is_admin) {
+            $orders = Order::with(['items.product', 'payment', 'user', 'address'])->latest()->get();
+        } else {
+            $orders = $user->orders()->with(['items.product', 'payment', 'address'])->latest()->get();
+        }
 
         return response()->json($orders);
     }
 
     public function show(Request $request, Order $order)
     {
-        abort_unless($order->user_id === $request->user()->id, 403);
-        $order->load('items.product', 'payment', 'address');
+        // Admin diperbolehkan melihat detail semua order
+        if ($request->user()->role !== 'admin' && !$request->user()->is_admin) {
+            abort_unless($order->user_id === $request->user()->id, 403, 'Akses ditolak');
+        }
+
+        $order->load(['items.product', 'payment', 'address', 'user']);
 
         return response()->json($order);
     }
@@ -68,7 +79,7 @@ class OrderController extends Controller
                     'subtotal' => $item->product->price * $item->quantity,
                 ]);
 
-                $item->product->decrement('stock', $item->quantity);
+                // $item->product->decrement('stock', $item->quantity);
             }
 
             $order->payment()->create([
@@ -82,6 +93,8 @@ class OrderController extends Controller
             return $order;
         });
 
-        return response()->json($order->load('items', 'payment'), 201);
+        return response()->json($order->load(['items.product', 'payment']), 201);
     }
+
+    
 }

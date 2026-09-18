@@ -6,6 +6,8 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -15,6 +17,9 @@ use Laravel\Sanctum\HasApiTokens;
     'email',
     'phone',
     'password',
+    'google_id',
+    'avatar',
+    'role',
 ])]
 #[Hidden([
     'password',
@@ -42,7 +47,7 @@ class User extends Authenticatable
     // CART
     // =====================================================
 
-    public function cart(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function cart(): HasOne
     {
         return $this->hasOne(Cart::class);
     }
@@ -51,7 +56,7 @@ class User extends Authenticatable
     // ADDRESSES
     // =====================================================
 
-    public function addresses(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function addresses(): HasMany
     {
         return $this->hasMany(Address::class);
     }
@@ -60,7 +65,7 @@ class User extends Authenticatable
     // ORDERS
     // =====================================================
 
-    public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
     }

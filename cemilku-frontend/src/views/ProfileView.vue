@@ -23,6 +23,12 @@ const userEmail = computed(() => currentUser.value?.email || 'belum-tersedia@ema
 const userPhone = computed(() => currentUser.value?.phone || 'Belum diisi')
 const userRole = computed(() => currentUser.value?.role || 'customer')
 
+const goToAdmin = () => {
+  if (userRole.value === 'admin') {
+    router.push('/admin')
+  }
+}
+
 const profileStats = computed(() => [
   {
     label: 'Total Pesanan',
@@ -100,13 +106,24 @@ onUnmounted(() => {
       <section class="profile-hero">
         <div class="profile-card">
           <div class="avatar-wrap">
-            <div class="avatar">
+            <div
+              class="avatar"
+              :class="{ clickable: userRole === 'admin' }"
+              :title="userRole === 'admin' ? 'Buka Dashboard Admin' : ''"
+              @click="goToAdmin"
+            >
               {{ userName.charAt(0).toUpperCase() }}
             </div>
           </div>
 
           <div class="profile-meta">
-            <span class="role-badge">{{ userRole === 'admin' ? 'Administrator' : 'Member' }}</span>
+            <span 
+              class="role-badge"
+              :class="{ clickable: userRole === 'admin' }"
+              @click="goToAdmin"
+            >
+              {{ userRole === 'admin' ? 'Administrator' : 'Member' }}
+            </span>
             <h1>{{ userName }}</h1>
             <p>{{ userEmail }}</p>
           </div>
@@ -147,7 +164,12 @@ onUnmounted(() => {
 
             <div class="info-item">
               <span>Role</span>
-              <strong>{{ userRole }}</strong>
+              <strong 
+                :class="{ clickable: userRole === 'admin' }"
+                @click="goToAdmin"
+              >
+                {{ userRole }}
+              </strong>
             </div>
           </div>
         </div>
@@ -240,6 +262,21 @@ onUnmounted(() => {
   font-size: 2rem;
   font-weight: 800;
   box-shadow: 0 14px 35px rgba(37, 99, 235, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+}
+
+.avatar.clickable {
+  cursor: pointer;
+}
+
+.avatar.clickable:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 18px 40px rgba(37, 99, 235, 0.45);
+}
+
+.avatar.clickable:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .profile-meta h1 {
@@ -265,6 +302,10 @@ onUnmounted(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.clickable {
+  cursor: pointer;
 }
 
 .edit-button {

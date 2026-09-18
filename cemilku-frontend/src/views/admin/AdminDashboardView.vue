@@ -257,13 +257,11 @@ const fetchDashboard = async () => {
     const orderResponseData = ordersResponse.data
     let totalOrderCount = 0
 
-    // Deteksi jika API mengembalikan objek total angka langsung (misal: { total: 5 })
     if (typeof orderResponseData?.total === 'number') {
       totalOrderCount = orderResponseData.total
     } else if (typeof orderResponseData?.data?.total === 'number') {
       totalOrderCount = orderResponseData.data.total
     } else {
-      // Jika merespons Array / List Order
       let orderData = orderResponseData?.data ?? orderResponseData
 
       if (orderData?.data && Array.isArray(orderData.data)) {
@@ -536,19 +534,6 @@ onUnmounted(() => {
         </router-link>
 
         <router-link
-          to="/admin/order-item"
-          class="menu-item"
-        >
-          <span class="menu-icon">
-            📋
-          </span>
-
-          <span class="menu-text">
-            Order Item
-          </span>
-        </router-link>
-
-        <router-link
           to="/admin/kontak"
           class="menu-item"
         >
@@ -576,6 +561,19 @@ onUnmounted(() => {
 
           <span class="menu-text">
             Pengaturan
+          </span>
+        </router-link>
+
+        <router-link
+          to="/admin/profile"
+          class="menu-item"
+        >
+          <span class="menu-icon">
+            👤
+          </span>
+
+          <span class="menu-text">
+            Profile
           </span>
         </router-link>
 
@@ -633,22 +631,27 @@ onUnmounted(() => {
             🔔
           </button>
 
-          <div class="user-info">
-            <div class="user-name">
-              {{ auth.username || 'Admin' }}
+          <div
+            class="user-profile-wrapper"
+            @click="router.push('/admin/profile')"
+          >
+            <div class="user-info">
+              <div class="user-name">
+                {{ auth.username || auth.user?.name || 'Admin' }}
+              </div>
+
+              <div class="user-role">
+                Administrator
+              </div>
             </div>
 
-            <div class="user-role">
-              Administrator
+            <div class="user-avatar">
+              {{
+                (auth.username || auth.user?.name || 'A')
+                  .charAt(0)
+                  .toUpperCase()
+              }}
             </div>
-          </div>
-
-          <div class="user-avatar">
-            {{
-              (auth.username || 'A')
-                .charAt(0)
-                .toUpperCase()
-            }}
           </div>
 
         </div>
@@ -730,7 +733,7 @@ onUnmounted(() => {
           </p>
         </div>
 
-        <!-- STATS CARDS (RINGKAS & SEDERHANA) -->
+        <!-- STATS CARDS -->
         <div v-else-if="stats.length" class="stats-grid">
           <div
             v-for="stat in stats"
@@ -1344,7 +1347,7 @@ onUnmounted(() => {
 }
 
 /* ==================================================
-   TOPBAR RIGHT
+   TOPBAR RIGHT & PROFILE WRAPPER
 ================================================== */
 
 .topbar-right {
@@ -1352,6 +1355,25 @@ onUnmounted(() => {
   align-items: center;
 
   gap: 12px;
+}
+
+.user-profile-wrapper {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 4px 8px;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  transition: background 0.2s ease;
+}
+
+.user-profile-wrapper:hover {
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .theme-toggle,
@@ -1420,6 +1442,8 @@ onUnmounted(() => {
   place-items: center;
 
   font-weight: 700;
+
+  flex-shrink: 0;
 }
 
 /* ==================================================
@@ -1561,7 +1585,7 @@ onUnmounted(() => {
 }
 
 /* ==================================================
-   STATS GRID (RINGKAS & SEDERHANA)
+   STATS GRID
 ================================================== */
 
 .stats-grid {

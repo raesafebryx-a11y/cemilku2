@@ -16,13 +16,21 @@ class Address extends Model
         'recipient_name',
         'phone',
         'full_address',
+
+        'province_id',
+        'province_name',
+
+        'city_id',
         'city',
+
         'postal_code',
         'latitude',
         'longitude',
     ];
 
     protected $casts = [
+        'province_id' => 'integer',
+        'city_id' => 'integer',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
     ];

@@ -30,26 +30,42 @@ class ProductController extends Controller
     }
 
     public function index(Request $request)
-    {
-        $query = Product::query()
-            ->with('category')
-            ->when(
-                ! $request->filled('search'),
-                fn ($query) => $query->where('is_active', true)
-            );
+{
+    $query = Product::query()
+        ->with('category');
 
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->category_id);
-        }
-
-        if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->search . '%');
-        }
-
-        return response()->json(
-            $query->latest()->paginate(12)
+    if ($request->filled('category_id')) {
+        $query->where(
+            'category_id',
+            $request->category_id
         );
     }
+
+    if ($request->filled('search')) {
+        $query->where(
+            'name',
+            'like',
+            '%' . $request->search . '%'
+        );
+    }
+
+    if ($request->filled('status')) {
+
+        if ($request->status === 'active') {
+            $query->where('is_active', 1);
+        }
+
+        if ($request->status === 'inactive') {
+            $query->where('is_active', 0);
+        }
+    }
+
+    return response()->json(
+        $query
+            ->latest()
+            ->paginate(12)
+    );
+}
 
     public function show(Product $product)
     {

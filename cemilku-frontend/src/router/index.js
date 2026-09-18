@@ -22,6 +22,8 @@ import AdminOrderView from '../views/admin/AdminOrderView.vue'
 import AdminOrderItemView from '../views/admin/AdminOrderItemView.vue'
 import AdminContactView from '../views/admin/AdminContactView.vue'
 import AdminPengaturanView from '../views/admin/AdminPengaturanView.vue'
+// Import komponen profil admin (Sesuaikan nama file di folder /views/admin/ jika menggunakan file terpisah)
+import AdminProfileView from '../views/admin/AdminProfileView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -79,9 +81,9 @@ const router = createRouter({
     },
 
     {
-    path: '/orders',
-    name: 'orders',
-    component: OrdersView
+      path: '/orders',
+      name: 'orders',
+      component: OrdersView
     },
 
     {
@@ -136,12 +138,6 @@ const router = createRouter({
     },
 
     {
-      path: '/admin/order-item',
-      name: 'admin-order-item',
-      component: AdminOrderItemView
-    },
-
-    {
       path: '/admin/kontak',
       name: 'admin-kontak',
       component: AdminContactView
@@ -152,6 +148,14 @@ const router = createRouter({
       name: 'admin-pengaturan',
       component: AdminPengaturanView
     },
+
+    // Tambahan Route Profile Admin
+    {
+      path: '/admin/profile',
+      name: 'admin-profile',
+      component: AdminProfileView // Gunakan AdminProfileView (atau ProfileView jika file komponennya sama)
+    },
+
     {
       path: '/auth/callback',
       component: () => import('@/views/AuthCallback.vue')
@@ -159,11 +163,15 @@ const router = createRouter({
   ]
 })
 
+// =========================
+// NAVIGATION GUARD
+// =========================
 router.beforeEach((to, from, next) => {
   const role = localStorage.getItem('role') || localStorage.getItem('userRole') || 'user'
 
+  // Jika admin mengakses /profile, arahkan ke /admin/profile
   if (to.path === '/profile' && role === 'admin') {
-    next('/admin')
+    next('/admin/profile')
     return
   }
 

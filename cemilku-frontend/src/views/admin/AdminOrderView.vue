@@ -255,6 +255,8 @@ const updateStatus = async (order, newStatus) => {
   }
 }
 
+const updatingPayment = ref(false)
+
 const formatRupiah = (value) => {
   if (value === null || value === undefined) return '-'
 
@@ -273,12 +275,25 @@ const formatDate = (date) => {
   }).format(new Date(date))
 }
 
+const getStorageUrl = (value) => {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value)) return value
+  const normalized = value
+    .replace(/^\/+/, '')
+    .replace(/^public\//i, '')
+    .replace(/^storage\//i, '')
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api'
+  const backendUrl = apiUrl.replace(/\/api\/?$/, '')
+  return `${backendUrl}/storage/${normalized}`
+}
+
 const getStatusLabel = (status) => statusOptions.find((item) => item.key === status)?.label || status
 const getStatusClass = (status) => `status-${status}`
 
 const getPaymentStatusLabel = (status) => {
   const labels = {
     pending: 'Menunggu Pembayaran',
+    waiting_verification: 'Menunggu Verifikasi',
     paid: 'Sudah Dibayar',
     failed: 'Gagal',
     expired: 'Kadaluarsa'
@@ -289,8 +304,59 @@ const getPaymentStatusLabel = (status) => {
 
 const getPaymentClass = (status) => {
   if (status === 'paid') return 'payment-paid'
+  if (status === 'waiting_verification') return 'payment-waiting'
   if (status === 'failed') return 'payment-failed'
   return 'payment-pending'
+}
+
+const updatePaymentStatus = async (order, newStatus) => {
+  if (!order || !newStatus) return
+
+  const result = await Swal.fire({
+    icon: 'question',
+    title: 'Ubah Status Pembayaran?',
+    text: `Status pembayaran akan diubah menjadi "${getPaymentStatusLabel(newStatus)}".`,
+    showCancelButton: true,
+    confirmButtonText: 'Ya, ubah',
+    cancelButtonText: 'Batal',
+    confirmButtonColor: '#2563eb'
+  })
+
+  if (!result.isConfirmed) return
+
+  updatingPayment.value = true
+  try {
+    const response = await api.put(`/admin/orders/${order.id}/payment-status`, { status: newStatus })
+    const resData = response.data
+    const updatedOrder = resData.order || resData.data || resData
+
+    const index = orders.value.findIndex((item) => item.id === order.id)
+    if (index !== -1) {
+      orders.value[index] = { ...orders.value[index], ...updatedOrder }
+    }
+
+    if (selectedOrder.value && selectedOrder.value.id === order.id) {
+      selectedOrder.value = { ...selectedOrder.value, ...updatedOrder }
+    }
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'Berhasil',
+      text: 'Status pembayaran berhasil diperbarui.',
+      timer: 1500,
+      showConfirmButton: false
+    })
+  } catch (err) {
+    console.error('Gagal mengubah status pembayaran:', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Gagal',
+      text: err.response?.data?.message || 'Status pembayaran gagal diperbarui.',
+      confirmButtonColor: '#2563eb'
+    })
+  } finally {
+    updatingPayment.value = false
+  }
 }
 
 onMounted(async () => {
@@ -342,53 +408,53 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <nav class="sidebar-menu">
-        <div class="menu-category">MAIN</div>
+     <nav class="sidebar-menu">
+  <div class="menu-category">MAIN</div>
 
-        <button class="menu-item" @click="goTo('/admin')">
-          <span class="menu-icon">📊</span>
-          <span class="menu-text">Dashboard</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin')">
+    <span class="menu-icon">📊</span>
+    <span class="menu-text">Dashboard</span>
+  </button>
 
-        <div class="menu-category">KELOLA TOKO</div>
+  <div class="menu-category">KELOLA TOKO</div>
 
-        <button class="menu-item" @click="goTo('/admin/produk')">
-          <span class="menu-icon">🍿</span>
-          <span class="menu-text">Produk</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/produk')">
+    <span class="menu-icon">🍿</span>
+    <span class="menu-text">Produk</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/kategori')">
-          <span class="menu-icon">🏷️</span>
-          <span class="menu-text">Kategori</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/kategori')">
+    <span class="menu-icon">🏷️</span>
+    <span class="menu-text">Kategori</span>
+  </button>
 
-        <button class="menu-item router-link-exact-active">
-          <span class="menu-icon">📑</span>
-          <span class="menu-text">Order</span>
-        </button>
+  <button class="menu-item router-link-exact-active">
+    <span class="menu-icon">📑</span>
+    <span class="menu-text">Order</span>
+  </button>
+  
+  <button class="menu-item" @click="goTo('/admin/kontak')">
+    <span class="menu-icon">💬</span>
+    <span class="menu-text">Pesan Kontak</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/order-item')">
-          <span class="menu-icon">📋</span>
-          <span class="menu-text">Order Item</span>
-        </button>
+  <div class="menu-category">SISTEM</div>
 
-        <button class="menu-item" @click="goTo('/admin/kontak')">
-          <span class="menu-icon">💬</span>
-          <span class="menu-text">Pesan Kontak</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/pengaturan')">
+    <span class="menu-icon">⚙️</span>
+    <span class="menu-text">Pengaturan</span>
+  </button>
 
-        <div class="menu-category">SISTEM</div>
+  <button class="menu-item" @click="goTo('/admin/profile')">
+    <span class="menu-icon">👤</span>
+    <span class="menu-text">Profile</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/pengaturan')">
-          <span class="menu-icon">⚙️</span>
-          <span class="menu-text">Pengaturan</span>
-        </button>
-
-        <a href="#" class="menu-item logout" @click.prevent="handleLogout">
-          <span class="menu-icon">🚪</span>
-          <span class="menu-text">Keluar</span>
-        </a>
-      </nav>
+  <a href="#" class="menu-item logout" @click.prevent="handleLogout">
+    <span class="menu-icon">🚪</span>
+    <span class="menu-text">Keluar</span>
+  </a>
+</nav>
     </aside>
 
     <div class="main-wrapper">
@@ -608,14 +674,26 @@ onUnmounted(() => {
           </div>
 
           <div class="detail-section">
-            <h3>🛒 Produk Pesanan</h3>
+            <div class="section-title-row">
+              <h3>🛒 Produk Pesanan</h3>
+              <span class="items-count-badge">{{ (selectedOrder.items || selectedOrder.order_items || []).length }} Produk</span>
+            </div>
             <div class="items-list">
               <div v-for="item in (selectedOrder.items || selectedOrder.order_items || [])" :key="item.id" class="order-item">
-                <div class="item-info">
-                  <strong>{{ item.product_name || item.product?.name || item.nama_produk || '-' }}</strong>
-                  <span>{{ item.quantity }} × {{ formatRupiah(item.price || item.harga) }}</span>
+                <div class="item-product-detail">
+                  <img
+                    v-if="item.product?.image"
+                    :src="getStorageUrl(item.product.image)"
+                    :alt="item.product_name || item.product?.name"
+                    class="item-thumbnail"
+                  />
+                  <div v-else class="item-placeholder">🍿</div>
+                  <div class="item-info">
+                    <strong>{{ item.product_name || item.product?.name || item.nama_produk || '-' }}</strong>
+                    <span>{{ item.quantity }} pcs × {{ formatRupiah(item.price || item.harga) }}</span>
+                  </div>
                 </div>
-                <strong>{{ formatRupiah(item.subtotal || (item.quantity * (item.price || item.harga))) }}</strong>
+                <strong class="item-subtotal">{{ formatRupiah(item.subtotal || (item.quantity * (item.price || item.harga))) }}</strong>
               </div>
             </div>
           </div>
@@ -644,16 +722,50 @@ onUnmounted(() => {
               </div>
               <div>
                 <span>Status</span>
-                <strong>{{ getPaymentStatusLabel(selectedOrder.payment.status) }}</strong>
+                <span class="payment-badge" :class="getPaymentClass(selectedOrder.payment.status)">
+                  {{ getPaymentStatusLabel(selectedOrder.payment.status) }}
+                </span>
               </div>
               <div>
                 <span>Jumlah</span>
                 <strong>{{ formatRupiah(selectedOrder.payment.amount || selectedOrder.payment.gross_amount) }}</strong>
               </div>
 
+              <!-- Quick action verify payment for admin -->
+              <div v-if="selectedOrder.payment.status !== 'paid'" class="payment-action-row">
+                <button
+                  class="verify-payment-btn"
+                  :disabled="updatingPayment"
+                  @click="updatePaymentStatus(selectedOrder, 'paid')"
+                >
+                  {{ updatingPayment ? 'Memproses...' : '✓ Verifikasi Pembayaran (Tandai Lunas)' }}
+                </button>
+              </div>
+
               <div v-if="selectedOrder.payment.proof_image" class="proof-wrapper">
-                <span>Bukti Pembayaran</span>
-                <img :src="selectedOrder.payment.proof_image" alt="Bukti pembayaran" />
+                <div class="proof-header">
+                  <span>Bukti Pembayaran</span>
+                  <a
+                    :href="selectedOrder.payment.proof_image_url || getStorageUrl(selectedOrder.payment.proof_image)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="proof-link"
+                  >
+                    🔍 Buka Ukuran Penuh
+                  </a>
+                </div>
+                <a
+                  :href="selectedOrder.payment.proof_image_url || getStorageUrl(selectedOrder.payment.proof_image)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="proof-img-container"
+                  title="Klik untuk membuka ukuran penuh"
+                >
+                  <img
+                    :src="selectedOrder.payment.proof_image_url || getStorageUrl(selectedOrder.payment.proof_image)"
+                    alt="Bukti pembayaran"
+                  />
+                </a>
               </div>
             </div>
             <div v-else class="no-data">Data pembayaran belum tersedia.</div>
@@ -1282,6 +1394,11 @@ td {
   color: #15803d;
 }
 
+.payment-waiting {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 .payment-pending {
   background: #fff7ed;
   color: #c2410c;
@@ -1426,6 +1543,26 @@ td {
   font-style: italic;
 }
 
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.section-title-row h3 {
+  margin: 0 !important;
+}
+
+.items-count-badge {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .items-list {
   display: flex;
   flex-direction: column;
@@ -1436,19 +1573,58 @@ td {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  padding: 10px 12px;
   background: rgba(148, 163, 184, 0.04);
+  border: 1px solid var(--panel-border);
   border-radius: 8px;
+  gap: 12px;
+}
+
+.item-product-detail {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.item-thumbnail {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--panel-border);
+  background: #f8fafc;
+}
+
+.item-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: rgba(37, 99, 235, 0.08);
+  font-size: 20px;
 }
 
 .item-info {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+}
+
+.item-info strong {
+  font-size: 13px;
+  color: var(--text);
 }
 
 .item-info span {
   font-size: 11px;
   color: var(--muted);
+}
+
+.item-subtotal {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .summary-box {
@@ -1478,17 +1654,47 @@ td {
 .payment-detail {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   background: rgba(148, 163, 184, 0.04);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  padding: 12px;
+  padding: 14px;
 }
 
 .payment-detail div {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 13px;
+}
+
+.payment-action-row {
+  display: flex;
+  justify-content: flex-end !important;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--panel-border);
+}
+
+.verify-payment-btn {
+  background: #16a34a;
+  color: #ffffff;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.verify-payment-btn:hover {
+  background: #15803d;
+}
+
+.verify-payment-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .proof-wrapper {
@@ -1497,15 +1703,42 @@ td {
   gap: 8px;
   margin-top: 8px;
   border-top: 1px dashed var(--panel-border);
-  padding-top: 8px;
+  padding-top: 10px;
 }
 
-.proof-wrapper img {
-  width: 100%;
-  max-height: 200px;
-  object-fit: contain;
+.proof-header {
+  display: flex;
+  justify-content: space-between !important;
+  align-items: center;
+  font-size: 12px;
+}
+
+.proof-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.proof-link:hover {
+  text-decoration: underline;
+}
+
+.proof-img-container {
+  display: block;
   border-radius: 8px;
+  overflow: hidden;
   border: 1px solid var(--panel-border);
+  background: #000;
+  max-height: 240px;
+  cursor: zoom-in;
+}
+
+.proof-img-container img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  display: block;
 }
 
 .modal-footer {
