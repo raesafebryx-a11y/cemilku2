@@ -1,11 +1,18 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 
-import Navbar from '../components/Navbar.vue'
-import Footer from '../components/Footer.vue'
 import api from '../services/api'
+
+import {
+  getOrderStatusInfo,
+  getPaymentStatusInfo,
+  isPending,
+  isProcessing,
+  isShipped,
+  isCompleted
+} from '../utils/orderStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,8 +27,12 @@ const error = ref('')
 
 const proofFile = ref(null)
 const uploadingProof = ref(false)
-
 const fileInput = ref(null)
+
+const payingMidtrans = ref(false)
+const snapLoaded = ref(false)
+
+let paymentPollingTimer = null
 
 // ==========================================
 // FORMAT RUPIAH
@@ -36,102 +47,50 @@ const formatRupiah = (value) => {
 }
 
 // ==========================================
-// STATUS
+// STATUS ORDER
 // ==========================================
 
 const statusInfo = computed(() => {
-  const status = order.value?.status
-
-  const statuses = {
-    pending: {
-      label: 'Menunggu Pembayaran',
-      icon: '⏳',
-      class: 'status-pending'
-    },
-
-    processing: {
-      label: 'Sedang Diproses',
-      icon: '📦',
-      class: 'status-processing'
-    },
-
-    shipped: {
-      label: 'Sedang Dikirim',
-      icon: '🚚',
-      class: 'status-shipped'
-    },
-
-    completed: {
-      label: 'Selesai',
-      icon: '✅',
-      class: 'status-completed'
-    },
-
-    cancelled: {
-      label: 'Dibatalkan',
-      icon: '❌',
-      class: 'status-cancelled'
-    }
-  }
-
-  return statuses[status] || {
-    label: status || 'Menunggu',
-    icon: '📋',
-    class: 'status-pending'
-  }
+  return getOrderStatusInfo(order.value?.status)
 })
 
 // ==========================================
-// PAYMENT STATUS
+// STATUS PAYMENT
 // ==========================================
 
 const paymentStatusInfo = computed(() => {
-  const status = order.value?.payment?.status
-
-  const statuses = {
-    pending: {
-      label: 'Menunggu Pembayaran',
-      class: 'payment-pending'
-    },
-
-    paid: {
-      label: 'Pembayaran Diterima',
-      class: 'payment-paid'
-    },
-
-    verified: {
-      label: 'Pembayaran Terverifikasi',
-      class: 'payment-paid'
-    },
-
-    rejected: {
-      label: 'Pembayaran Ditolak',
-      class: 'payment-rejected'
-    }
-  }
-
-  return statuses[status] || {
-    label: status || 'Menunggu',
-    class: 'payment-pending'
-  }
+  return getPaymentStatusInfo(
+    order.value?.payment?.status
+  )
 })
 
 // ==========================================
 // FETCH ORDER
 // ==========================================
 
-const fetchOrder = async () => {
-  loading.value = true
+const fetchOrder = async (showLoading = true) => {
+  if (showLoading) {
+    loading.value = true
+  }
+
   error.value = ''
 
   try {
-    const response = await api.get(`/orders/${route.params.id}`)
+    const response = await api.get(
+      `/orders/${route.params.id}`
+    )
 
     order.value = response.data
 
-    console.log('Detail order:', response.data)
+    console.log(
+      'Detail order:',
+      response.data
+    )
   } catch (err) {
-    console.error('Gagal mengambil detail order:', err)
+    console.error(
+      'Gagal mengambil detail order:',
+      err
+    )
 
     if (err.response?.status === 401) {
       await Swal.fire({
@@ -145,23 +104,28 @@ const fetchOrder = async () => {
     }
 
     if (err.response?.status === 403) {
-      error.value = 'Kamu tidak memiliki akses ke pesanan ini.'
+      error.value =
+        'Kamu tidak memiliki akses ke pesanan ini.'
       return
     }
 
     if (err.response?.status === 404) {
-      error.value = 'Pesanan tidak ditemukan.'
+      error.value =
+        'Pesanan tidak ditemukan.'
       return
     }
 
-    error.value = 'Gagal mengambil detail pesanan.'
+    error.value =
+      'Gagal mengambil detail pesanan.'
   } finally {
-    loading.value = false
+    if (showLoading) {
+      loading.value = false
+    }
   }
 }
 
 // ==========================================
-// TANGGAL
+// FORMAT DATE
 // ==========================================
 
 const formatDate = (date) => {
@@ -169,10 +133,15 @@ const formatDate = (date) => {
     return '-'
   }
 
-  return new Intl.DateTimeFormat('id-ID', {
-    dateStyle: 'long',
-    timeStyle: 'short'
-  }).format(new Date(date))
+  return new Intl.DateTimeFormat(
+    'id-ID',
+    {
+      dateStyle: 'long',
+      timeStyle: 'short'
+    }
+  ).format(
+    new Date(date)
+  )
 }
 
 // ==========================================
@@ -190,7 +159,8 @@ const selectProofFile = (event) => {
     Swal.fire({
       icon: 'warning',
       title: 'File Tidak Valid',
-      text: 'Bukti pembayaran harus berupa gambar.'
+      text:
+        'Bukti pembayaran harus berupa gambar.'
     })
 
     event.target.value = ''
@@ -201,7 +171,8 @@ const selectProofFile = (event) => {
     Swal.fire({
       icon: 'warning',
       title: 'File Terlalu Besar',
-      text: 'Ukuran bukti pembayaran maksimal 2 MB.'
+      text:
+        'Ukuran bukti pembayaran maksimal 2 MB.'
     })
 
     event.target.value = ''
@@ -220,7 +191,8 @@ const uploadProof = async () => {
     await Swal.fire({
       icon: 'warning',
       title: 'Pilih Bukti Pembayaran',
-      text: 'Silakan pilih gambar bukti transfer terlebih dahulu.'
+      text:
+        'Silakan pilih gambar bukti transfer terlebih dahulu.'
     })
 
     return
@@ -230,7 +202,8 @@ const uploadProof = async () => {
     await Swal.fire({
       icon: 'error',
       title: 'Pembayaran Tidak Ditemukan',
-      text: 'Data pembayaran untuk pesanan ini tidak ditemukan.'
+      text:
+        'Data pembayaran untuk pesanan ini tidak ditemukan.'
     })
 
     return
@@ -251,15 +224,20 @@ const uploadProof = async () => {
       formData,
       {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type':
+            'multipart/form-data'
         }
       }
     )
 
-    console.log('Payment:', response.data)
+    console.log(
+      'Payment:',
+      response.data
+    )
 
-    // Update payment dari response
-    order.value.payment = response.data
+    order.value.payment =
+      response.data?.payment ||
+      response.data
 
     proofFile.value = null
 
@@ -269,23 +247,36 @@ const uploadProof = async () => {
 
     await Swal.fire({
       icon: 'success',
-      title: 'Bukti Berhasil Diupload',
-      text: 'Bukti pembayaran berhasil dikirim dan sedang menunggu verifikasi.',
-      confirmButtonColor: '#2563eb'
+      title:
+        'Bukti Berhasil Diupload',
+      text:
+        'Bukti pembayaran berhasil dikirim dan sedang menunggu verifikasi.',
+      confirmButtonColor:
+        '#2563eb'
     })
 
     await fetchOrder()
   } catch (err) {
-    console.error('Gagal upload bukti:', err)
+    console.error(
+      'Gagal upload bukti:',
+      err
+    )
 
-    let message = 'Gagal mengupload bukti pembayaran.'
+    let message =
+      'Gagal mengupload bukti pembayaran.'
 
     if (err.response?.data?.message) {
-      message = err.response.data.message
+      message =
+        err.response.data.message
     }
 
-    if (err.response?.data?.errors?.proof_image?.[0]) {
-      message = err.response.data.errors.proof_image[0]
+    if (
+      err.response?.data?.errors
+        ?.proof_image?.[0]
+    ) {
+      message =
+        err.response.data.errors
+          .proof_image[0]
     }
 
     await Swal.fire({
@@ -299,7 +290,36 @@ const uploadProof = async () => {
 }
 
 // ==========================================
-// IMAGE URL
+// BACKEND URL
+// ==========================================
+
+const backendBaseUrl = computed(() => {
+  const base =
+    api.defaults.baseURL || ''
+
+  return base
+    .replace(/\/api\/?$/, '')
+    .replace(/\/$/, '')
+})
+
+// ==========================================
+// STORAGE URL
+// ==========================================
+
+const resolveStorageUrl = (path) => {
+  if (!path) {
+    return ''
+  }
+
+  if (path.startsWith('http')) {
+    return path
+  }
+
+  return `${backendBaseUrl.value}/storage/${path}`
+}
+
+// ==========================================
+// PRODUCT IMAGE
 // ==========================================
 
 const getImageUrl = (product) => {
@@ -307,19 +327,10 @@ const getImageUrl = (product) => {
     return ''
   }
 
-  if (product.image_url) {
-    return product.image_url
-  }
-
-  if (product.image) {
-    if (product.image.startsWith('http')) {
-      return product.image
-    }
-
-    return `http://127.0.0.1:8000/storage/${product.image}`
-  }
-
-  return ''
+  return resolveStorageUrl(
+    product.image_url ||
+    product.image
+  )
 }
 
 // ==========================================
@@ -327,21 +338,13 @@ const getImageUrl = (product) => {
 // ==========================================
 
 const getProofUrl = () => {
-  const proof = order.value?.payment?.proof_image
-
-  if (!proof) {
-    return ''
-  }
-
-  if (proof.startsWith('http')) {
-    return proof
-  }
-
-  return `http://127.0.0.1:8000/storage/${proof}`
+  return resolveStorageUrl(
+    order.value?.payment?.proof_image
+  )
 }
 
 // ==========================================
-// BACK
+// NAVIGATION
 // ==========================================
 
 const goToHome = () => {
@@ -353,11 +356,525 @@ const goToProducts = () => {
 }
 
 // ==========================================
+// LOAD MIDTRANS SNAP.JS
+// ==========================================
+
+const loadSnapScript = (
+  clientKey,
+  isProduction = false
+) => {
+  return new Promise(
+    (resolve, reject) => {
+      if (!clientKey) {
+        reject(
+          new Error(
+            'Client Key Midtrans tidak ditemukan.'
+          )
+        )
+        return
+      }
+
+      if (
+        window.snap &&
+        typeof window.snap.pay ===
+          'function'
+      ) {
+        snapLoaded.value = true
+        resolve(window.snap)
+        return
+      }
+
+      const existingScript =
+        document.getElementById(
+          'midtrans-snap-js'
+        )
+
+      if (existingScript) {
+        existingScript.addEventListener(
+          'load',
+          () => {
+            if (
+              window.snap &&
+              typeof window.snap.pay ===
+                'function'
+            ) {
+              snapLoaded.value = true
+              resolve(
+                window.snap
+              )
+            } else {
+              reject(
+                new Error(
+                  'Snap.js dimuat tetapi tidak tersedia.'
+                )
+              )
+            }
+          },
+          {
+            once: true
+          }
+        )
+
+        existingScript.addEventListener(
+          'error',
+          () => {
+            reject(
+              new Error(
+                'Gagal memuat Snap.js Midtrans.'
+              )
+            )
+          },
+          {
+            once: true
+          }
+        )
+
+        return
+      }
+
+      const script =
+        document.createElement(
+          'script'
+        )
+
+      script.id =
+        'midtrans-snap-js'
+
+      script.src =
+        isProduction
+          ? 'https://app.midtrans.com/snap/snap.js'
+          : 'https://app.sandbox.midtrans.com/snap/snap.js'
+
+      script.setAttribute(
+        'data-client-key',
+        clientKey
+      )
+
+      script.async = true
+
+      script.onload = () => {
+        if (
+          window.snap &&
+          typeof window.snap.pay ===
+            'function'
+        ) {
+          snapLoaded.value = true
+
+          resolve(
+            window.snap
+          )
+        } else {
+          reject(
+            new Error(
+              'Snap.js berhasil dimuat tetapi window.snap tidak tersedia.'
+            )
+          )
+        }
+      }
+
+      script.onerror = () => {
+        snapLoaded.value = false
+
+        reject(
+          new Error(
+            'Gagal memuat Snap.js Midtrans.'
+          )
+        )
+      }
+
+      document.head.appendChild(
+        script
+      )
+    }
+  )
+}
+
+// ==========================================
+// STOP POLLING
+// ==========================================
+
+const stopPaymentPolling = () => {
+  if (paymentPollingTimer) {
+    clearInterval(
+      paymentPollingTimer
+    )
+
+    paymentPollingTimer = null
+  }
+}
+
+// ==========================================
+// WAIT WEBHOOK
+// ==========================================
+
+const waitForPaymentConfirmation =
+  async (orderId) => {
+    const maxAttempts = 15
+    const delay = 1500
+
+    for (
+      let attempt = 0;
+      attempt < maxAttempts;
+      attempt++
+    ) {
+      try {
+        const response =
+          await api.get(
+            `/orders/${orderId}`
+          )
+
+        const latestOrder =
+          response.data
+
+        order.value =
+          latestOrder
+
+        console.log(
+          `Cek pembayaran ${attempt + 1}/${maxAttempts}:`,
+          {
+            payment:
+              latestOrder?.payment?.status,
+
+            order:
+              latestOrder?.status
+          }
+        )
+
+        if (
+          latestOrder?.payment
+            ?.status === 'paid'
+          ||
+          latestOrder?.status ===
+            'processing'
+        ) {
+          return latestOrder
+        }
+
+        if (
+          latestOrder?.payment
+            ?.status === 'failed'
+          ||
+          latestOrder?.status ===
+            'cancelled'
+        ) {
+          return latestOrder
+        }
+      } catch (error) {
+        console.error(
+          'Gagal mengecek status payment:',
+          error
+        )
+      }
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            delay
+          )
+      )
+    }
+
+    return null
+  }
+
+// ==========================================
+// BAYAR MIDTRANS
+// ==========================================
+
+const payMidtrans = async () => {
+  if (!order.value?.id) {
+    return
+  }
+
+  if (
+    order.value?.payment?.status ===
+    'paid'
+  ) {
+    await Swal.fire({
+      icon: 'info',
+      title:
+        'Pesanan Sudah Dibayar',
+      text:
+        'Pesanan ini sudah berhasil dibayar.',
+      confirmButtonColor:
+        '#2563eb'
+    })
+
+    return
+  }
+
+  payingMidtrans.value = true
+
+  stopPaymentPolling()
+
+  try {
+    // ======================================
+    // 1. AMBIL SNAP TOKEN DARI BACKEND
+    // ======================================
+
+    const response =
+      await api.post(
+        `/orders/${order.value.id}/snap-token`
+      )
+
+    console.log(
+      'Response Snap Token:',
+      response.data
+    )
+
+    const snapToken =
+      response.data?.snap_token
+
+    const clientKey =
+      response.data?.client_key
+
+    const isProduction =
+      Boolean(
+        response.data?.is_production
+      )
+
+    if (!snapToken) {
+      throw new Error(
+        response.data?.message ||
+        'Snap Token tidak ditemukan dari server.'
+      )
+    }
+
+    if (!clientKey) {
+      throw new Error(
+        'Client Key Midtrans tidak ditemukan.'
+      )
+    }
+
+    // ======================================
+    // 2. LOAD SNAP.JS
+    // ======================================
+
+    const snap =
+      await loadSnapScript(
+        clientKey,
+        isProduction
+      )
+
+    if (
+      !snap ||
+      typeof snap.pay !==
+        'function'
+    ) {
+      throw new Error(
+        'Midtrans Snap tidak siap digunakan.'
+      )
+    }
+
+    // ======================================
+    // 3. BUKA POPUP MIDTRANS
+    // ======================================
+
+    snap.pay(
+      snapToken,
+      {
+        language: 'id',
+
+        // ==================================
+        // SUCCESS
+        // ==================================
+
+        onSuccess:
+          async (result) => {
+            console.log(
+              'Midtrans SUCCESS:',
+              result
+            )
+
+            /*
+             * Tunggu webhook masuk.
+             */
+            const latestOrder =
+              await waitForPaymentConfirmation(
+                order.value.id
+              )
+
+            if (
+              latestOrder?.payment
+                ?.status === 'paid'
+              ||
+              latestOrder?.status ===
+                'processing'
+            ) {
+              order.value =
+                latestOrder
+
+              await Swal.fire({
+                icon: 'success',
+                title:
+                  'Pembayaran Berhasil!',
+                text:
+                  'Pembayaran berhasil dikonfirmasi dan pesanan sedang diproses.',
+                confirmButtonText:
+                  'OK',
+                confirmButtonColor:
+                  '#2563eb'
+              })
+
+              await fetchOrder(
+                false
+              )
+
+              return
+            }
+
+            /*
+             * Callback sukses, tetapi webhook
+             * belum terlihat.
+             */
+            await fetchOrder(
+              false
+            )
+
+            await Swal.fire({
+              icon: 'success',
+              title:
+                'Pembayaran Berhasil!',
+              text:
+                'Pembayaran sudah diterima Midtrans. Status pesanan sedang diperbarui oleh sistem.',
+              confirmButtonText:
+                'OK',
+              confirmButtonColor:
+                '#2563eb'
+            })
+          },
+
+        // ==================================
+        // PENDING
+        // ==================================
+
+        onPending:
+          async (result) => {
+            console.log(
+              'Midtrans PENDING:',
+              result
+            )
+
+            await fetchOrder(
+              false
+            )
+
+            await Swal.fire({
+              icon: 'info',
+              title:
+                'Menunggu Pembayaran',
+              text:
+                'Transaksi belum selesai. Silakan selesaikan pembayaran sesuai instruksi Midtrans.',
+              confirmButtonText:
+                'OK',
+              confirmButtonColor:
+                '#2563eb'
+            })
+          },
+
+        // ==================================
+        // ERROR
+        // ==================================
+
+        onError:
+          (result) => {
+            console.error(
+              'Midtrans ERROR:',
+              result
+            )
+
+            Swal.fire({
+              icon: 'error',
+              title:
+                'Pembayaran Gagal',
+              text:
+                'Midtrans melaporkan pembayaran gagal. Silakan coba lagi.',
+              confirmButtonColor:
+                '#2563eb'
+            })
+          },
+
+        // ==================================
+        // CLOSE
+        // ==================================
+
+        onClose:
+          async () => {
+            console.log(
+              'Popup Midtrans ditutup.'
+            )
+
+            /*
+             * Close bukan berarti paid.
+             */
+            await fetchOrder(
+              false
+            )
+          }
+      }
+    )
+  } catch (err) {
+    console.error(
+      'Gagal memulai pembayaran Midtrans:',
+      err
+    )
+
+    let message =
+      'Gagal membuat transaksi Midtrans.'
+
+    if (
+      err.response?.data?.message
+    ) {
+      message =
+        err.response.data.message
+    }
+
+    if (
+      err.response?.data?.error
+        ?.error_messages?.[0]
+    ) {
+      message =
+        err.response.data.error
+          .error_messages[0]
+    }
+
+    if (
+      err.message &&
+      !err.response
+    ) {
+      message =
+        err.message
+    }
+
+    await Swal.fire({
+      icon: 'error',
+      title:
+        'Pembayaran Gagal',
+      text: message,
+      confirmButtonColor:
+        '#2563eb'
+    })
+  } finally {
+    payingMidtrans.value =
+      false
+  }
+}
+
+// ==========================================
 // MOUNTED
 // ==========================================
 
-onMounted(() => {
-  fetchOrder()
+onMounted(async () => {
+  await fetchOrder()
+})
+
+// ==========================================
+// UNMOUNTED
+// ==========================================
+
+onUnmounted(() => {
+  stopPaymentPolling()
 })
 </script>
 
@@ -382,7 +899,8 @@ onMounted(() => {
           </h3>
 
           <p>
-            Tunggu sebentar, kami mengambil detail pesanan kamu.
+            Tunggu sebentar, kami mengambil
+            detail pesanan kamu.
           </p>
         </div>
 
@@ -408,6 +926,7 @@ onMounted(() => {
 
           <button
             class="primary-button"
+            type="button"
             @click="goToHome"
           >
             Kembali ke Beranda
@@ -418,42 +937,47 @@ onMounted(() => {
              ORDER
         =================================== -->
 
-        <template v-else-if="order">
+        <template
+          v-else-if="order"
+        >
 
           <!-- HEADER -->
           <div class="order-header">
 
-            <div>
+            <button
+              class="back-button"
+              type="button"
+              @click="goToHome"
+            >
+              ← Kembali ke Beranda
+            </button>
 
-              <button
-                class="back-button"
-                @click="goToHome"
+            <div class="title-row">
+
+              <div>
+                <h1>
+                  Detail Pesanan
+                </h1>
+
+                <p>
+                  Pesanan kamu berhasil dibuat.
+                </p>
+              </div>
+
+              <div
+                class="order-status"
+                :class="
+                  statusInfo.class
+                "
               >
-                ← Kembali ke Beranda
-              </button>
 
-              <div class="title-row">
+                <span>
+                  {{ statusInfo.icon }}
+                </span>
 
-                <div>
-                  <h1>
-                    Detail Pesanan
-                  </h1>
-
-                  <p>
-                    Pesanan kamu berhasil dibuat.
-                  </p>
-                </div>
-
-                <div
-                  class="order-status"
-                  :class="statusInfo.class"
-                >
-                  <span>
-                    {{ statusInfo.icon }}
-                  </span>
-
-                  {{ statusInfo.label }}
-                </div>
+                {{
+                  statusInfo.label
+                }}
 
               </div>
 
@@ -462,13 +986,18 @@ onMounted(() => {
           </div>
 
           <!-- ORDER NUMBER -->
-          <section class="order-number-card">
+          <section
+            class="order-number-card"
+          >
 
-            <div class="order-number-icon">
+            <div
+              class="order-number-icon"
+            >
               📦
             </div>
 
             <div>
+
               <span>
                 Nomor Pesanan
               </span>
@@ -478,25 +1007,36 @@ onMounted(() => {
               </strong>
 
               <small>
-                Dibuat {{ formatDate(order.created_at) }}
+                Dibuat
+                {{
+                  formatDate(
+                    order.created_at
+                  )
+                }}
               </small>
+
             </div>
 
           </section>
 
-          <!-- MAIN GRID -->
+          <!-- GRID -->
           <div class="order-grid">
 
-            <!-- LEFT -->
+            <!-- ==================================
+                 LEFT
+            =================================== -->
+
             <div class="order-left">
 
-              <!-- ==================================
-                   STATUS
-              =================================== -->
+              <!-- STATUS -->
+              <section
+                class="detail-card"
+              >
 
-              <section class="detail-card">
+                <div
+                  class="card-title"
+                >
 
-                <div class="card-title">
                   <div class="card-icon">
                     📋
                   </div>
@@ -507,17 +1047,28 @@ onMounted(() => {
                     </h2>
 
                     <p>
-                      Status pesanan kamu saat ini.
+                      Status pesanan kamu
+                      saat ini.
                     </p>
                   </div>
+
                 </div>
 
-                <div class="status-timeline">
+                <div
+                  class="status-timeline"
+                >
 
+                  <!-- STEP 1 -->
                   <div
-                    class="timeline-item active"
+                    class="
+                      timeline-item
+                      active
+                    "
                   >
-                    <div class="timeline-dot">
+
+                    <div
+                      class="timeline-dot"
+                    >
                       ✓
                     </div>
 
@@ -530,30 +1081,46 @@ onMounted(() => {
                         Pesanan berhasil dibuat.
                       </span>
                     </div>
+
                   </div>
 
                   <div
                     class="timeline-line"
                   ></div>
 
+                  <!-- STEP 2 -->
                   <div
                     class="timeline-item"
                     :class="{
                       active:
-                        order.status !== 'pending'
+                        !isPending(
+                          order.status
+                        )
                     }"
                   >
-                    <div class="timeline-dot">
-                      <span v-if="order.status !== 'pending'">
+
+                    <div
+                      class="timeline-dot"
+                    >
+
+                      <span
+                        v-if="
+                          !isPending(
+                            order.status
+                          )
+                        "
+                      >
                         ✓
                       </span>
 
                       <span v-else>
                         2
                       </span>
+
                     </div>
 
                     <div>
+
                       <strong>
                         Pembayaran
                       </strong>
@@ -563,32 +1130,35 @@ onMounted(() => {
                           paymentStatusInfo.label
                         }}
                       </span>
+
                     </div>
+
                   </div>
 
                   <div
                     class="timeline-line"
                   ></div>
 
+                  <!-- STEP 3 -->
                   <div
                     class="timeline-item"
                     :class="{
                       active:
-                        [
-                          'processing',
-                          'shipped',
-                          'completed'
-                        ].includes(order.status)
+                        isProcessing(
+                          order.status
+                        )
                     }"
                   >
-                    <div class="timeline-dot">
+
+                    <div
+                      class="timeline-dot"
+                    >
+
                       <span
                         v-if="
-                          [
-                            'processing',
-                            'shipped',
-                            'completed'
-                          ].includes(order.status)
+                          isProcessing(
+                            order.status
+                          )
                         "
                       >
                         ✓
@@ -597,40 +1167,48 @@ onMounted(() => {
                       <span v-else>
                         3
                       </span>
+
                     </div>
 
                     <div>
+
                       <strong>
                         Pesanan Diproses
                       </strong>
 
                       <span>
-                        Pesanan akan diproses oleh penjual.
+                        Pesanan akan diproses
+                        oleh penjual.
                       </span>
+
                     </div>
+
                   </div>
 
                   <div
                     class="timeline-line"
                   ></div>
 
+                  <!-- STEP 4 -->
                   <div
                     class="timeline-item"
                     :class="{
                       active:
-                        [
-                          'shipped',
-                          'completed'
-                        ].includes(order.status)
+                        isShipped(
+                          order.status
+                        )
                     }"
                   >
-                    <div class="timeline-dot">
+
+                    <div
+                      class="timeline-dot"
+                    >
+
                       <span
                         v-if="
-                          [
-                            'shipped',
-                            'completed'
-                          ].includes(order.status)
+                          isShipped(
+                            order.status
+                          )
                         "
                       >
                         ✓
@@ -639,34 +1217,48 @@ onMounted(() => {
                       <span v-else>
                         4
                       </span>
+
                     </div>
 
                     <div>
+
                       <strong>
                         Dikirim
                       </strong>
 
                       <span>
-                        Pesanan sedang menuju alamat kamu.
+                        Pesanan sedang menuju
+                        alamat kamu.
                       </span>
+
                     </div>
+
                   </div>
 
                   <div
                     class="timeline-line"
                   ></div>
 
+                  <!-- STEP 5 -->
                   <div
                     class="timeline-item"
                     :class="{
                       active:
-                        order.status === 'completed'
+                        isCompleted(
+                          order.status
+                        )
                     }"
                   >
-                    <div class="timeline-dot">
+
+                    <div
+                      class="timeline-dot"
+                    >
+
                       <span
                         v-if="
-                          order.status === 'completed'
+                          isCompleted(
+                            order.status
+                          )
                         "
                       >
                         ✓
@@ -675,9 +1267,11 @@ onMounted(() => {
                       <span v-else>
                         5
                       </span>
+
                     </div>
 
                     <div>
+
                       <strong>
                         Selesai
                       </strong>
@@ -685,20 +1279,23 @@ onMounted(() => {
                       <span>
                         Pesanan telah selesai.
                       </span>
+
                     </div>
+
                   </div>
 
                 </div>
 
               </section>
 
-              <!-- ==================================
-                   ADDRESS
-              =================================== -->
+              <!-- ADDRESS -->
+              <section
+                class="detail-card"
+              >
 
-              <section class="detail-card">
-
-                <div class="card-title">
+                <div
+                  class="card-title"
+                >
 
                   <div class="card-icon">
                     📍
@@ -717,34 +1314,60 @@ onMounted(() => {
                 </div>
 
                 <div
-                  v-if="order.address"
+                  v-if="
+                    order.address
+                  "
                   class="address-box"
                 >
 
-                  <div class="address-name">
+                  <div
+                    class="address-name"
+                  >
+
                     <strong>
-                      {{ order.address.recipient_name }}
+                      {{
+                        order.address
+                          .recipient_name
+                      }}
                     </strong>
 
                     <span
-                      v-if="order.address.label"
-                      class="address-label"
+                      v-if="
+                        order.address.label
+                      "
+                      class="
+                        address-label
+                      "
                     >
-                      {{ order.address.label }}
+                      {{
+                        order.address.label
+                      }}
                     </span>
+
                   </div>
 
                   <p>
-                    📱 {{ order.address.phone }}
+                    📱
+                    {{
+                      order.address.phone
+                    }}
                   </p>
 
                   <p>
-                    {{ order.address.full_address }}
+                    {{
+                      order.address
+                        .full_address
+                    }}
                   </p>
 
                   <span>
-                    {{ order.address.city }},
-                    {{ order.address.postal_code }}
+                    {{
+                      order.address.city
+                    }},
+                    {{
+                      order.address
+                        .postal_code
+                    }}
                   </span>
 
                 </div>
@@ -758,13 +1381,14 @@ onMounted(() => {
 
               </section>
 
-              <!-- ==================================
-                   PRODUCTS
-              =================================== -->
+              <!-- PRODUCTS -->
+              <section
+                class="detail-card"
+              >
 
-              <section class="detail-card">
-
-                <div class="card-title">
+                <div
+                  class="card-title"
+                >
 
                   <div class="card-icon">
                     🛍️
@@ -782,47 +1406,83 @@ onMounted(() => {
 
                 </div>
 
-                <div class="order-products">
+                <div
+                  class="order-products"
+                >
 
                   <div
-                    v-for="item in order.items"
+                    v-for="
+                      item in order.items
+                    "
                     :key="item.id"
                     class="order-product"
                   >
 
-                    <div class="product-image">
+                    <div
+                      class="product-image"
+                    >
 
                       <img
-                        v-if="getImageUrl(item.product)"
-                        :src="getImageUrl(item.product)"
-                        :alt="item.product_name"
+                        v-if="
+                          getImageUrl(
+                            item.product
+                          )
+                        "
+                        :src="
+                          getImageUrl(
+                            item.product
+                          )
+                        "
+                        :alt="
+                          item.product_name
+                        "
                       />
 
                       <div
                         v-else
-                        class="image-placeholder"
+                        class="
+                          image-placeholder
+                        "
                       >
                         🍪
                       </div>
 
                     </div>
 
-                    <div class="product-info">
+                    <div
+                      class="product-info"
+                    >
 
                       <strong>
-                        {{ item.product_name }}
+                        {{
+                          item.product_name
+                        }}
                       </strong>
 
                       <span>
-                        {{ item.quantity }}
+                        {{
+                          item.quantity
+                        }}
                         ×
-                        {{ formatRupiah(item.price) }}
+                        {{
+                          formatRupiah(
+                            item.price
+                          )
+                        }}
                       </span>
 
                     </div>
 
-                    <strong class="product-subtotal">
-                      {{ formatRupiah(item.subtotal) }}
+                    <strong
+                      class="
+                        product-subtotal
+                      "
+                    >
+                      {{
+                        formatRupiah(
+                          item.subtotal
+                        )
+                      }}
                     </strong>
 
                   </div>
@@ -831,13 +1491,17 @@ onMounted(() => {
 
               </section>
 
-              <!-- ==================================
-                   PAYMENT
-              =================================== -->
+              <!-- PAYMENT -->
+              <section
+                class="
+                  detail-card
+                  payment-card
+                "
+              >
 
-              <section class="detail-card payment-card">
-
-                <div class="card-title">
+                <div
+                  class="card-title"
+                >
 
                   <div class="card-icon">
                     💳
@@ -849,196 +1513,178 @@ onMounted(() => {
                     </h2>
 
                     <p>
-                      Lakukan pembayaran sesuai total pesanan.
+                      Lakukan pembayaran sesuai
+                      total pesanan.
                     </p>
                   </div>
 
                 </div>
 
                 <div
-                  v-if="order.payment"
-                  class="payment-content"
+                  v-if="
+                    order.payment
+                  "
+                  class="
+                    payment-content
+                  "
                 >
 
                   <!-- PAYMENT STATUS -->
-
-                  <div class="payment-status-row">
+                  <div
+                    class="
+                      payment-status-row
+                    "
+                  >
 
                     <div>
+
                       <span>
                         Status Pembayaran
                       </span>
 
                       <strong>
-                        {{ paymentStatusInfo.label }}
+                        {{
+                          paymentStatusInfo.label
+                        }}
                       </strong>
+
                     </div>
 
                     <span
-                      class="payment-badge"
-                      :class="paymentStatusInfo.class"
+                      class="
+                        payment-badge
+                      "
+                      :class="
+                        paymentStatusInfo.class
+                      "
                     >
-                      {{ paymentStatusInfo.label }}
+                      {{
+                        paymentStatusInfo.label
+                      }}
                     </span>
 
                   </div>
 
-                  <!-- BANK INFO -->
-
-                  <div class="bank-box">
-
-                    <div class="bank-header">
-                      <span>
-                        🏦
-                      </span>
-
-                      <strong>
-                        Transfer Bank
-                      </strong>
-                    </div>
-
-                    <div class="bank-detail">
-
-                      <span>
-                        Bank
-                      </span>
-
-                      <strong>
-                        BCA
-                      </strong>
-
-                    </div>
-
-                    <div class="bank-detail">
-
-                      <span>
-                        Nomor Rekening
-                      </span>
-
-                      <strong>
-                        1234567890
-                      </strong>
-
-                    </div>
-
-                    <div class="bank-detail">
-
-                      <span>
-                        Atas Nama
-                      </span>
-
-                      <strong>
-                        CEMILKU
-                      </strong>
-
-                    </div>
-
-                    <div class="bank-detail total">
-
-                      <span>
-                        Total Transfer
-                      </span>
-
-                      <strong>
-                        {{ formatRupiah(order.payment.amount) }}
-                      </strong>
-
-                    </div>
-
-                  </div>
-
-                  <!-- UPLOAD PROOF -->
-
+                  <!-- MIDTRANS BUTTON -->
                   <div
                     v-if="
-                      order.payment.status === 'pending'
+                      order.payment
+                        .status ===
+                      'pending'
                     "
-                    class="upload-section"
+                    class="
+                      midtrans-section
+                    "
                   >
 
-                    <div class="upload-title">
-
-                      <strong>
-                        Upload Bukti Transfer
-                      </strong>
-
-                      <span>
-                        JPG, PNG, JPEG maksimal 2 MB
-                      </span>
-
-                    </div>
-
-                    <label class="upload-box">
-
-                      <input
-                        ref="fileInput"
-                        type="file"
-                        accept="image/*"
-                        @change="selectProofFile"
-                      />
-
-                      <div class="upload-icon">
-                        📤
-                      </div>
-
-                      <strong>
-                        {{
-                          proofFile
-                            ? proofFile.name
-                            : 'Pilih bukti transfer'
-                        }}
-                      </strong>
-
-                      <span>
-                        Klik untuk memilih file
-                      </span>
-
-                    </label>
-
                     <button
-                      class="upload-button"
-                      :disabled="
-                        uploadingProof ||
-                        !proofFile
+                      class="
+                        midtrans-button
                       "
-                      @click="uploadProof"
+                      type="button"
+                      :disabled="
+                        payingMidtrans
+                      "
+                      @click="
+                        payMidtrans
+                      "
                     >
 
-                      <span v-if="uploadingProof">
-                        Mengupload...
+                      <span
+                        v-if="
+                          payingMidtrans
+                        "
+                      >
+                        Membuka Midtrans...
                       </span>
 
                       <span v-else>
-                        Upload Bukti Pembayaran
+                        💳 Bayar Sekarang
+                        dengan Midtrans
                       </span>
 
                     </button>
 
+                    <p
+                      class="
+                        midtrans-info
+                      "
+                    >
+                      Pembayaran akan diproses
+                      melalui Midtrans Sandbox.
+                    </p>
+
                   </div>
 
-                  <!-- EXISTING PROOF -->
-
+                  <!-- SUCCESS -->
                   <div
-                    v-if="order.payment.proof_image"
+                    v-if="
+                      order.payment
+                        .status ===
+                      'paid'
+                    "
+                    class="
+                      payment-success-box
+                    "
+                  >
+
+                    <div
+                      class="
+                        payment-success-icon
+                      "
+                    >
+                      ✓
+                    </div>
+
+                    <div>
+
+                      <strong>
+                        Pembayaran Berhasil
+                      </strong>
+
+                      <span>
+                        Pembayaran telah
+                        dikonfirmasi oleh sistem.
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <!-- PROOF -->
+                  <div
+                    v-if="
+                      order.payment
+                        .proof_image
+                    "
                     class="proof-success"
                   >
 
-                    <div class="proof-header">
+                    <div
+                      class="
+                        proof-header
+                      "
+                    >
 
                       <div>
+
                         <strong>
                           ✓ Bukti Pembayaran
                         </strong>
 
                         <span>
-                          Bukti transfer sudah dikirim.
+                          Bukti transfer sudah
+                          dikirim.
                         </span>
+
                       </div>
 
                     </div>
 
                     <a
-                      :href="getProofUrl()"
+                      :href="
+                        getProofUrl()
+                      "
                       target="_blank"
                       class="proof-link"
                     >
@@ -1053,83 +1699,87 @@ onMounted(() => {
                   v-else
                   class="no-data"
                 >
-                  Data pembayaran belum tersedia.
+                  Data pembayaran belum
+                  tersedia.
                 </div>
 
               </section>
 
             </div>
 
-            <!-- RIGHT -->
-            <aside class="order-right">
+            <!-- ==================================
+                 RIGHT
+            =================================== -->
+
+            <aside
+              class="order-right"
+            >
 
               <!-- SUMMARY -->
-
-              <section class="summary-card">
+              <section
+                class="summary-card"
+              >
 
                 <h2>
                   Ringkasan Pembayaran
                 </h2>
 
-                <div class="summary-row">
+                <div
+                  class="summary-row"
+                >
 
                   <span>
                     Subtotal
                   </span>
 
                   <strong>
-                    {{ formatRupiah(order.subtotal) }}
+                    {{
+                      formatRupiah(
+                        order.subtotal
+                      )
+                    }}
                   </strong>
 
                 </div>
 
-                <div class="summary-row">
+                <div
+                  class="summary-row"
+                >
 
                   <span>
                     Pengiriman
                   </span>
 
                   <strong>
-                    {{ formatRupiah(order.shipping_cost) }}
+                    {{
+                      formatRupiah(
+                        order.shipping_cost
+                      )
+                    }}
                   </strong>
 
                 </div>
 
-                <div class="summary-divider"></div>
+                <div
+                  class="summary-divider"
+                ></div>
 
-                <div class="summary-total">
+                <div
+                  class="
+                    summary-total
+                  "
+                >
 
                   <span>
                     Total
                   </span>
 
                   <strong>
-                    {{ formatRupiah(order.total) }}
-                  </strong>
-
-                </div>
-
-              </section>
-
-              <!-- PAYMENT MINI -->
-
-              <section
-                v-if="order.payment"
-                class="mini-payment-card"
-              >
-
-                <div class="mini-payment-icon">
-                  💳
-                </div>
-
-                <div>
-
-                  <span>
-                    Metode Pembayaran
-                  </span>
-
-                  <strong>
-                    Transfer Bank
+                    {{
+                      formatRupiah(
+                        order.total
+                      )
+                    }}
                   </strong>
 
                 </div>
@@ -1137,8 +1787,9 @@ onMounted(() => {
               </section>
 
               <!-- HELP -->
-
-              <section class="help-card">
+              <section
+                class="help-card"
+              >
 
                 <div class="help-icon">
                   💬
@@ -1156,7 +1807,10 @@ onMounted(() => {
                   </p>
 
                   <button
-                    @click="goToProducts"
+                    type="button"
+                    @click="
+                      goToProducts
+                    "
                   >
                     Belanja Lagi →
                   </button>
@@ -1329,7 +1983,9 @@ onMounted(() => {
 
 .order-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  grid-template-columns:
+    minmax(0, 1fr)
+    350px;
   gap: 22px;
   align-items: start;
 }
@@ -1349,17 +2005,18 @@ onMounted(() => {
 }
 
 /* ==========================================
-   CARDS
+   CARD
 ========================================== */
 
 .detail-card,
 .summary-card,
-.mini-payment-card,
 .help-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 17px;
-  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04);
+  box-shadow:
+    0 8px 30px
+    rgba(15, 23, 42, 0.04);
 }
 
 .detail-card {
@@ -1370,9 +2027,58 @@ onMounted(() => {
   padding: 22px;
 }
 
-.mini-payment-card,
 .help-card {
   padding: 17px;
+}
+
+/* ==========================================
+   SUMMARY
+========================================== */
+
+.summary-card h2 {
+  margin: 0 0 18px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.summary-row span {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.summary-row strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.summary-divider {
+  height: 1px;
+  margin: 14px 0;
+  background: #e2e8f0;
+}
+
+.summary-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-total span {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.summary-total strong {
+  color: #2563eb;
+  font-size: 24px;
+  font-weight: 900;
 }
 
 /* ==========================================
@@ -1561,10 +2267,10 @@ onMounted(() => {
 }
 
 .product-info {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
-  min-width: 0;
   flex: 1;
 }
 
@@ -1604,7 +2310,7 @@ onMounted(() => {
   gap: 4px;
 }
 
-.payment-status-row span {
+.payment-status-row > div > span {
   color: #64748b;
   font-size: 11px;
 }
@@ -1616,183 +2322,105 @@ onMounted(() => {
 .payment-badge {
   padding: 6px 9px;
   border-radius: 7px;
-  font-size: 10px !important;
+  font-size: 10px;
   font-weight: 800;
 }
 
-.payment-pending {
-  background: #fef3c7;
-  color: #92400e;
+.midtrans-section {
+  margin-bottom: 18px;
 }
 
-.payment-paid {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.payment-rejected {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.bank-box {
-  padding: 17px;
-  background: #f8fbff;
-  border: 1px solid #dbeafe;
-  border-radius: 12px;
-}
-
-.bank-header {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding-bottom: 13px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid #dbeafe;
-}
-
-.bank-header span {
-  font-size: 20px;
-}
-
-.bank-header strong {
+.midtrans-button {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 14px;
+  background: #2563eb;
+  color: #ffffff;
   font-size: 14px;
-}
-
-.bank-detail {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  padding: 9px 0;
-}
-
-.bank-detail span {
-  color: #64748b;
-  font-size: 11px;
-}
-
-.bank-detail strong {
-  color: #334155;
-  font-size: 12px;
-}
-
-.bank-detail.total {
-  margin-top: 5px;
-  padding-top: 13px;
-  border-top: 1px dashed #cbd5e1;
-}
-
-.bank-detail.total strong {
-  color: #2563eb;
-  font-size: 16px;
-}
-
-/* ==========================================
-   UPLOAD
-========================================== */
-
-.upload-section {
-  margin-top: 18px;
-}
-
-.upload-title {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-bottom: 10px;
-}
-
-.upload-title strong {
-  font-size: 13px;
-}
-
-.upload-title span {
-  color: #94a3b8;
-  font-size: 10px;
-}
-
-.upload-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 145px;
-  padding: 20px;
-  border: 2px dashed #bfdbfe;
-  background: #f8fbff;
-  border-radius: 12px;
-  text-align: center;
+  font-weight: 700;
   cursor: pointer;
   transition: 0.2s;
 }
 
-.upload-box:hover {
-  border-color: #2563eb;
-  background: #eff6ff;
-}
-
-.upload-box input {
-  display: none;
-}
-
-.upload-icon {
-  margin-bottom: 8px;
-  font-size: 26px;
-}
-
-.upload-box strong {
-  max-width: 100%;
-  overflow: hidden;
-  color: #2563eb;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.upload-box span {
-  margin-top: 4px;
-  color: #94a3b8;
-  font-size: 10px;
-}
-
-.upload-button {
-  width: 100%;
-  margin-top: 11px;
-  padding: 12px;
-  border: none;
-  border-radius: 9px;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.upload-button:hover:not(:disabled) {
+.midtrans-button:hover:not(:disabled) {
   background: #1d4ed8;
+  transform: translateY(-1px);
 }
 
-.upload-button:disabled {
-  opacity: 0.5;
+.midtrans-button:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
-.proof-success {
-  margin-top: 17px;
+.midtrans-info {
+  margin: 8px 0 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.payment-success-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
   padding: 14px;
-  background: #f0fdf4;
   border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  border-radius: 11px;
+}
+
+.payment-success-icon {
+  width: 35px;
+  height: 35px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #dcfce7;
+  color: #16a34a;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.payment-success-box > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.payment-success-box strong {
+  color: #166534;
+  font-size: 13px;
+}
+
+.payment-success-box span {
+  color: #4b5563;
+  font-size: 11px;
+}
+
+.proof-success {
+  padding: 15px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 11px;
 }
 
 .proof-header {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 10px;
 }
 
+.proof-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .proof-header strong {
-  display: block;
-  margin-bottom: 3px;
   color: #166534;
   font-size: 13px;
 }
@@ -1805,7 +2433,7 @@ onMounted(() => {
 .proof-link {
   display: inline-block;
   color: #2563eb;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-decoration: none;
 }
@@ -1815,180 +2443,142 @@ onMounted(() => {
 }
 
 /* ==========================================
-   SUMMARY
-========================================== */
-
-.summary-card h2 {
-  margin: 0 0 20px;
-  font-size: 17px;
-  font-weight: 800;
-}
-
-.summary-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.summary-row strong {
-  color: #334155;
-}
-
-.summary-divider {
-  height: 1px;
-  margin: 17px 0;
-  background: #e2e8f0;
-}
-
-.summary-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.summary-total span {
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.summary-total strong {
-  color: #2563eb;
-  font-size: 19px;
-  font-weight: 900;
-}
-
-/* ==========================================
-   MINI PAYMENT
-========================================== */
-
-.mini-payment-card {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.mini-payment-icon {
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #eff6ff;
-  border-radius: 9px;
-  font-size: 18px;
-}
-
-.mini-payment-card > div:last-child {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.mini-payment-card span {
-  color: #94a3b8;
-  font-size: 10px;
-}
-
-.mini-payment-card strong {
-  font-size: 12px;
-}
-
-/* ==========================================
    HELP
 ========================================== */
 
 .help-card {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
-  background: #eff6ff;
-  border-color: #dbeafe;
+  gap: 12px;
 }
 
 .help-icon {
-  font-size: 20px;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  border-radius: 10px;
+  font-size: 18px;
 }
 
 .help-card strong {
-  display: block;
-  margin-bottom: 4px;
   font-size: 13px;
 }
 
 .help-card p {
-  margin: 0 0 9px;
+  margin: 5px 0 0;
   color: #64748b;
   font-size: 11px;
   line-height: 1.5;
 }
 
 .help-card button {
+  margin-top: 10px;
   border: none;
-  padding: 0;
-  background: transparent;
-  color: #2563eb;
+  padding: 9px 12px;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 8px;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
 }
 
+.help-card button:hover {
+  background: #1d4ed8;
+}
+
 /* ==========================================
-   EMPTY / ERROR
+   EMPTY
 ========================================== */
 
 .no-data {
-  padding: 20px;
+  padding: 18px;
+  text-align: center;
+  color: #64748b;
   background: #f8fafc;
   border-radius: 10px;
-  color: #64748b;
-  text-align: center;
   font-size: 12px;
 }
 
-.loading-box,
-.error-box {
-  min-height: 500px;
+/* ==========================================
+   LOADING
+========================================== */
+
+.loading-box {
+  min-height: 450px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
+  color: #64748b;
   text-align: center;
 }
 
-.loading-box h3,
-.error-box h2 {
-  margin: 15px 0 5px;
+.loading-box h3 {
+  margin: 8px 0 0;
+  color: #0f172a;
+  font-size: 17px;
 }
 
-.loading-box p,
-.error-box p {
-  margin: 0 0 20px;
-  color: #64748b;
-  font-size: 13px;
+.loading-box p {
+  margin: 0;
+  font-size: 12px;
 }
 
 .spinner {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border: 3px solid #dbeafe;
   border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================
+   ERROR
+========================================== */
+
+.error-box {
+  max-width: 600px;
+  margin: 70px auto;
+  padding: 40px 25px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 17px;
+  text-align: center;
+}
+
 .error-icon {
   font-size: 45px;
 }
 
+.error-box h2 {
+  margin: 15px 0 8px;
+}
+
+.error-box p {
+  margin: 0 0 20px;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .primary-button {
   border: none;
-  padding: 11px 17px;
+  padding: 11px 18px;
+  border-radius: 9px;
   background: #2563eb;
   color: #ffffff;
-  border-radius: 9px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -1996,12 +2586,6 @@ onMounted(() => {
 
 .primary-button:hover {
   background: #1d4ed8;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* ==========================================
@@ -2024,8 +2608,8 @@ onMounted(() => {
   }
 
   .title-row {
-    flex-direction: column;
     align-items: flex-start;
+    flex-direction: column;
   }
 
   .title-row h1 {
@@ -2035,10 +2619,6 @@ onMounted(() => {
   .order-status {
     width: 100%;
     justify-content: center;
-  }
-
-  .order-number-card {
-    padding: 15px;
   }
 
   .detail-card,
@@ -2063,12 +2643,6 @@ onMounted(() => {
   .payment-status-row {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .bank-detail {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
   }
 }
 </style>
