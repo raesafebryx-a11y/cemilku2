@@ -39,6 +39,28 @@ class AdminContactController extends Controller
     }
 
     /**
+     * Memperbarui status baca pesan kontak (Dibaca / Belum Dibaca).
+     */
+    public function update(Request $request, Contact $contact)
+    {
+        if ($request->user()->role !== 'admin') {
+            return response()->json([
+                'message' => 'Akses hanya untuk admin.'
+            ], 403);
+        }
+
+        $contact->update([
+            'is_read' => $request->has('is_read') ? $request->boolean('is_read') : $contact->is_read,
+            'status'  => $request->input('status', $contact->status),
+        ]);
+
+        return response()->json([
+            'message' => 'Status pesan berhasil diperbarui.',
+            'data'    => $contact
+        ]);
+    }
+
+    /**
      * Menghapus pesan kontak.
      */
     public function destroy(Request $request, Contact $contact)

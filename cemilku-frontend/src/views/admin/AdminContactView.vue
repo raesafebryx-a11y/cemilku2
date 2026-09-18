@@ -82,10 +82,13 @@ const filteredContacts = computed(() => {
   return contacts.value.filter((contact) => {
     const name = contact.name?.toLowerCase() || ''
     const email = contact.email?.toLowerCase() || ''
-    const subject = contact.subject?.toLowerCase() || ''
     const message = contact.message?.toLowerCase() || ''
 
-    return name.includes(keyword) || email.includes(keyword) || subject.includes(keyword) || message.includes(keyword)
+    return (
+      name.includes(keyword) ||
+      email.includes(keyword) ||
+      message.includes(keyword)
+    )
   })
 })
 
@@ -97,12 +100,6 @@ const todayMessages = computed(() => {
   return contacts.value.filter((contact) => {
     if (!contact.created_at) return false
     return new Date(contact.created_at).toDateString() === today
-  }).length
-})
-
-const unreadMessages = computed(() => {
-  return contacts.value.filter((contact) => {
-    return contact.is_read === false || contact.is_read === 0 || contact.status === 'unread'
   }).length
 })
 
@@ -251,59 +248,60 @@ onUnmounted(() => {
       </div>
 
       <nav class="sidebar-menu">
-        <div class="menu-category">MAIN</div>
+  <div class="menu-category">MAIN</div>
 
-        <button class="menu-item" @click="goTo('/admin')">
-          <span class="menu-icon">📊</span>
-          <span class="menu-text">Dashboard</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin')">
+    <span class="menu-icon">📊</span>
+    <span class="menu-text">Dashboard</span>
+  </button>
 
-        <div class="menu-category">KELOLA TOKO</div>
+  <div class="menu-category">KELOLA TOKO</div>
 
-        <button class="menu-item" @click="goTo('/admin/produk')">
-          <span class="menu-icon">🍿</span>
-          <span class="menu-text">Produk</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/produk')">
+    <span class="menu-icon">🍿</span>
+    <span class="menu-text">Produk</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/kategori')">
-          <span class="menu-icon">🏷️</span>
-          <span class="menu-text">Kategori</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/kategori')">
+    <span class="menu-icon">🏷️</span>
+    <span class="menu-text">Kategori</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/order')">
-          <span class="menu-icon">📑</span>
-          <span class="menu-text">Order</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/order')">
+    <span class="menu-icon">📑</span>
+    <span class="menu-text">Order</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/order-item')">
-          <span class="menu-icon">📋</span>
-          <span class="menu-text">Order Item</span>
-        </button>
+  
+  <button class="menu-item router-link-exact-active">
+    <span class="menu-icon">💬</span>
+    <span class="menu-text">Pesan Kontak</span>
+  </button>
 
-        <button class="menu-item router-link-exact-active">
-          <span class="menu-icon">💬</span>
-          <span class="menu-text">Pesan Kontak</span>
-        </button>
+  <div class="menu-category">SISTEM</div>
 
-        <div class="menu-category">SISTEM</div>
+  <button class="menu-item" @click="goTo('/admin/pengaturan')">
+    <span class="menu-icon">⚙️</span>
+    <span class="menu-text">Pengaturan</span>
+  </button>
 
-        <button class="menu-item" @click="goTo('/admin/pengaturan')">
-          <span class="menu-icon">⚙️</span>
-          <span class="menu-text">Pengaturan</span>
-        </button>
+  <button class="menu-item" @click="goTo('/admin/profile')">
+    <span class="menu-icon">👤</span>
+    <span class="menu-text">Profile</span>
+  </button>
 
-        <a href="#" class="menu-item logout" @click.prevent="handleLogout">
-          <span class="menu-icon">🚪</span>
-          <span class="menu-text">Keluar</span>
-        </a>
-      </nav>
+  <a href="#" class="menu-item logout" @click.prevent="handleLogout">
+    <span class="menu-icon">🚪</span>
+    <span class="menu-text">Keluar</span>
+  </a>
+</nav>
     </aside>
 
     <div class="main-wrapper">
       <header class="topbar">
         <div class="search-box">
           <span class="search-icon">🔍</span>
-          <input v-model="search" type="text" placeholder="Cari nama, email, subjek..." />
+         <input v-model="search" type="text" placeholder="Cari nama, email, atau pesan..." />
         </div>
 
         <div class="topbar-right">
@@ -356,15 +354,6 @@ onUnmounted(() => {
             <div class="stat-value">{{ todayMessages }}</div>
             <div class="stat-sub">Pesan hari ini</div>
           </div>
-
-          <div class="stat-card">
-            <div class="stat-header">
-              <span class="stat-label">Belum Dibaca</span>
-              <div class="stat-icon-wrapper orange">🔔</div>
-            </div>
-            <div class="stat-value">{{ unreadMessages }}</div>
-            <div class="stat-sub">Perlu ditindaklanjuti</div>
-          </div>
         </div>
 
         <div class="table-card">
@@ -391,7 +380,6 @@ onUnmounted(() => {
               <thead>
                 <tr>
                   <th>PENGIRIM</th>
-                  <th>SUBJEK</th>
                   <th>PESAN</th>
                   <th>TANGGAL</th>
                   <th>AKSI</th>
@@ -408,10 +396,6 @@ onUnmounted(() => {
                         <small>{{ contact.email || '-' }}</small>
                       </div>
                     </div>
-                  </td>
-
-                  <td>
-                    <span class="subject">{{ contact.subject || 'Tanpa subjek' }}</span>
                   </td>
 
                   <td>
@@ -464,11 +448,6 @@ onUnmounted(() => {
             <div class="detail-row">
               <span>Email</span>
               <strong>{{ selectedContact.email || '-' }}</strong>
-            </div>
-
-            <div class="detail-row">
-              <span>Subjek</span>
-              <strong>{{ selectedContact.subject || 'Tanpa subjek' }}</strong>
             </div>
 
             <div class="detail-row">
@@ -832,7 +811,7 @@ onUnmounted(() => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 18px;
 }
@@ -872,7 +851,6 @@ onUnmounted(() => {
 
 .stat-icon-wrapper.blue { background: rgba(37, 99, 235, 0.08); }
 .stat-icon-wrapper.green { background: rgba(34, 197, 94, 0.12); }
-.stat-icon-wrapper.orange { background: rgba(249, 115, 22, 0.1); }
 
 .stat-value {
   font-size: 30px;
@@ -1010,10 +988,7 @@ td {
   font-size: 10px;
 }
 
-.subject {
-  color: var(--text);
-  font-weight: 700;
-}
+
 
 .message-preview {
   max-width: 260px;
@@ -1195,7 +1170,7 @@ td {
 .danger-button {
   border: none;
   padding: 10px 16px;
-  border-radius: 9px;
+  border-radius: 99px;
   font-weight: 700;
   cursor: pointer;
 }
